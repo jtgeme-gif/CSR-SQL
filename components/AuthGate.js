@@ -16,7 +16,10 @@ export default function AuthGate({ children }) {
   }, []);
 
   async function signIn() {
-    await supabase.auth.signInWithOAuth({ provider: 'azure' });
+    await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: { scopes: 'email' },
+    });
   }
 
   async function signOut() {
