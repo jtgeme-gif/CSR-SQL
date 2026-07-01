@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import AppShell from './AppShell';
 
 export default function AuthGate({ children }) {
   // undefined = still checking, null = signed out, object = signed in
@@ -45,15 +46,8 @@ export default function AuthGate({ children }) {
   }
 
   return (
-    <div>
-      <header className="top-bar">
-        <span className="brand">Matter Tracker</span>
-        <div className="top-bar-right">
-          <span className="muted">{session.user.email}</span>
-          <button className="btn-link" onClick={signOut}>Sign out</button>
-        </div>
-      </header>
+    <AppShell session={session} onSignOut={signOut}>
       {children}
-    </div>
+    </AppShell>
   );
 }
