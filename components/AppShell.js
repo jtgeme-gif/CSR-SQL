@@ -37,13 +37,16 @@ export default function AppShell({ session, onSignOut, children }) {
   return (
     <div className="app-shell">
       <header className="top-bar">
-        <span className="brand">Matter Tracker</span>
+        <div className="top-bar-logo">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/mmm-logo.jpg" alt="McGraw Morris Masud" />
+        </div>
         <div className="top-bar-right">
           <div className="user-badge">
             <span className="avatar">{initials || 'U'}</span>
             <span className="user-name">{name}</span>
           </div>
-          <button className="btn-link" onClick={onSignOut}>
+          <button className="btn-signout" onClick={onSignOut}>
             Sign out
           </button>
         </div>
@@ -52,8 +55,6 @@ export default function AppShell({ session, onSignOut, children }) {
       <div className="shell-body">
         <aside className="sidebar">
           <div className="sidebar-logo">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/mmm-logo.jpg" alt="McGraw Morris Masud" />
             <div className="sidebar-wordmark">MATTER TRACKER</div>
           </div>
 
