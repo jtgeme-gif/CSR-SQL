@@ -123,6 +123,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  border-right: 2px solid var(--navy);
 }
 .sidebar-logo {
   background: #fff;
