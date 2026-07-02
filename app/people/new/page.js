@@ -14,7 +14,9 @@ export default function NewPersonPage() {
     identity: 'Individual',
     entity_id: null, entity_name: '',
     address: '', city: '', state: '', zip: '',
-    phone1: '', phone2: '', email1: '', email2: '', website: '',
+    phone1: '', phone1_label: '', phone2: '', phone2_label: '',
+    email1: '', email1_label: '', email2: '', email2_label: '',
+    website: '',
     mediator: false, field_of_expertise: '',
     court_level: '', court_jurisdiction: '', magjudge: false,
     notes: '',
@@ -59,9 +61,13 @@ export default function NewPersonPage() {
       state: form.state.trim() || null,
       zip: form.zip.trim() || null,
       phone1: form.phone1.trim() || null,
+      phone1_label: form.phone1_label.trim() || null,
       phone2: form.phone2.trim() || null,
+      phone2_label: form.phone2_label.trim() || null,
       email1: form.email1.trim() || null,
+      email1_label: form.email1_label.trim() || null,
       email2: form.email2.trim() || null,
+      email2_label: form.email2_label.trim() || null,
       website: form.website.trim() || null,
       mediator: form.mediator,
       field_of_expertise: form.field_of_expertise.trim() || null,
@@ -169,21 +175,25 @@ export default function NewPersonPage() {
         <div className="form-row">
           <div className="form-field">
             <label>Phone 1</label>
-            <input type="text" value={form.phone1} onChange={(e) => update('phone1', e.target.value)} />
+            <input type="text" className="field-sublabel" placeholder="Label (e.g. Work Cell)" value={form.phone1_label} onChange={(e) => update('phone1_label', e.target.value)} />
+            <input type="text" value={form.phone1} onChange={(e) => update('phone1', e.target.value)} placeholder="Phone number" />
           </div>
           <div className="form-field">
             <label>Phone 2</label>
-            <input type="text" value={form.phone2} onChange={(e) => update('phone2', e.target.value)} />
+            <input type="text" className="field-sublabel" placeholder="Label (e.g. Personal Cell)" value={form.phone2_label} onChange={(e) => update('phone2_label', e.target.value)} />
+            <input type="text" value={form.phone2} onChange={(e) => update('phone2', e.target.value)} placeholder="Phone number" />
           </div>
         </div>
         <div className="form-row">
           <div className="form-field">
             <label>Email 1</label>
-            <input type="text" value={form.email1} onChange={(e) => update('email1', e.target.value)} />
+            <input type="text" className="field-sublabel" placeholder="Label (e.g. Work Email)" value={form.email1_label} onChange={(e) => update('email1_label', e.target.value)} />
+            <input type="text" value={form.email1} onChange={(e) => update('email1', e.target.value)} placeholder="Email address" />
           </div>
           <div className="form-field">
             <label>Email 2</label>
-            <input type="text" value={form.email2} onChange={(e) => update('email2', e.target.value)} />
+            <input type="text" className="field-sublabel" placeholder="Label (e.g. Personal Email)" value={form.email2_label} onChange={(e) => update('email2_label', e.target.value)} />
+            <input type="text" value={form.email2} onChange={(e) => update('email2', e.target.value)} placeholder="Email address" />
           </div>
         </div>
 

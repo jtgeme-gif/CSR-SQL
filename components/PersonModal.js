@@ -65,9 +65,13 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
       state: form.state?.trim() || null,
       zip: form.zip?.trim() || null,
       phone1: form.phone1?.trim() || null,
+      phone1_label: form.phone1_label?.trim() || null,
       phone2: form.phone2?.trim() || null,
+      phone2_label: form.phone2_label?.trim() || null,
       email1: form.email1?.trim() || null,
+      email1_label: form.email1_label?.trim() || null,
       email2: form.email2?.trim() || null,
+      email2_label: form.email2_label?.trim() || null,
       website: form.website?.trim() || null,
       mediator: !!form.mediator,
       field_of_expertise: form.field_of_expertise?.trim() || null,
@@ -116,10 +120,10 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
               <div className="detail-card"><span className="detail-label">Title</span><span className="detail-value">{person.title || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Entity</span><span className="detail-value">{person.entities?.name || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Mediator</span><span className="detail-value">{person.mediator ? 'Yes' : 'No'}</span></div>
-              <div className="detail-card"><span className="detail-label">Phone 1</span><span className="detail-value">{person.phone1 || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Phone 2</span><span className="detail-value">{person.phone2 || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Email 1</span><span className="detail-value">{person.email1 || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Email 2</span><span className="detail-value">{person.email2 || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">{person.phone1_label || 'Phone 1'}</span><span className="detail-value">{person.phone1 || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">{person.phone2_label || 'Phone 2'}</span><span className="detail-value">{person.phone2 || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">{person.email1_label || 'Email 1'}</span><span className="detail-value">{person.email1 || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">{person.email2_label || 'Email 2'}</span><span className="detail-value">{person.email2 || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Address</span><span className="detail-value">{[person.address, person.city, person.state, person.zip].filter(Boolean).join(', ') || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Website</span><span className="detail-value">{person.website || '—'}</span></div>
               {person.identity === 'Judge' && (
@@ -182,12 +186,28 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
               <div className="form-field"><label>Zip</label><input value={form.zip || ''} onChange={(e) => update('zip', e.target.value)} /></div>
             </div>
             <div className="form-row">
-              <div className="form-field"><label>Phone 1</label><input value={form.phone1 || ''} onChange={(e) => update('phone1', e.target.value)} /></div>
-              <div className="form-field"><label>Phone 2</label><input value={form.phone2 || ''} onChange={(e) => update('phone2', e.target.value)} /></div>
+              <div className="form-field">
+                <label>Phone 1</label>
+                <input className="field-sublabel" placeholder="Label" value={form.phone1_label || ''} onChange={(e) => update('phone1_label', e.target.value)} />
+                <input value={form.phone1 || ''} onChange={(e) => update('phone1', e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label>Phone 2</label>
+                <input className="field-sublabel" placeholder="Label" value={form.phone2_label || ''} onChange={(e) => update('phone2_label', e.target.value)} />
+                <input value={form.phone2 || ''} onChange={(e) => update('phone2', e.target.value)} />
+              </div>
             </div>
             <div className="form-row">
-              <div className="form-field"><label>Email 1</label><input value={form.email1 || ''} onChange={(e) => update('email1', e.target.value)} /></div>
-              <div className="form-field"><label>Email 2</label><input value={form.email2 || ''} onChange={(e) => update('email2', e.target.value)} /></div>
+              <div className="form-field">
+                <label>Email 1</label>
+                <input className="field-sublabel" placeholder="Label" value={form.email1_label || ''} onChange={(e) => update('email1_label', e.target.value)} />
+                <input value={form.email1 || ''} onChange={(e) => update('email1', e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label>Email 2</label>
+                <input className="field-sublabel" placeholder="Label" value={form.email2_label || ''} onChange={(e) => update('email2_label', e.target.value)} />
+                <input value={form.email2 || ''} onChange={(e) => update('email2', e.target.value)} />
+              </div>
             </div>
             <div className="form-field"><label>Website</label><input value={form.website || ''} onChange={(e) => update('website', e.target.value)} /></div>
             <div className="form-checkbox">

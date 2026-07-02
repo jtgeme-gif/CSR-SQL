@@ -642,6 +642,13 @@ a:hover {
   font-size: 13px;
 }
 
+.form-field input.field-sublabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 5px 8px;
+  margin-bottom: 4px;
+}
+
 /* Detail view */
 .detail-grid {
   display: grid;
