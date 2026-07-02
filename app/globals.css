@@ -40,6 +40,21 @@ a:hover {
   text-decoration: underline;
 }
 
+/* App shell layout */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.shell-body {
+  display: flex;
+  flex: 1;
+}
+.shell-content {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Top bar */
 .top-bar {
   display: flex;
@@ -47,7 +62,9 @@ a:hover {
   justify-content: space-between;
   background: var(--navy);
   color: #fff;
-  padding: 14px 24px;
+  padding: 12px 24px;
+  height: 56px;
+  box-sizing: border-box;
 }
 .brand {
   font-weight: 700;
@@ -57,22 +74,134 @@ a:hover {
 .top-bar-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   font-size: 13px;
 }
-.top-bar-right .muted {
-  color: #b8c4d6;
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.user-name {
+  color: #e6edf6;
 }
 .btn-link {
   background: none;
-  border: none;
-  color: #cfe0f5;
-  font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: var(--radius);
+  color: #e6edf6;
+  font-size: 12px;
   cursor: pointer;
-  padding: 0;
+  padding: 6px 12px;
 }
 .btn-link:hover {
+  background: rgba(255,255,255,0.08);
+  text-decoration: none;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--navy);
+  color: #e6edf6;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.sidebar-logo {
+  text-align: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.sidebar-logo img {
+  max-width: 120px;
+  height: auto;
+  margin-bottom: 8px;
+}
+.sidebar-wordmark {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #9fb3cc;
+}
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6f84a3;
+  margin: 14px 0 6px;
+}
+.nav-section-label:first-child {
+  margin-top: 0;
+}
+.nav-item {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: #cfe0f5;
+  text-decoration: none;
+  cursor: pointer;
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.06);
+  text-decoration: none;
+}
+.nav-item.active {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+.nav-item.disabled {
+  color: #5c7092;
+  cursor: default;
+}
+.nav-item.disabled:hover {
+  background: none;
+}
+.sidebar-starred {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+.starred-item {
+  display: block;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: #f0c94e;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.starred-item:hover {
   text-decoration: underline;
+}
+.starred-empty {
+  font-size: 12px;
+  color: #5c7092;
+  padding: 5px 10px;
 }
 
 /* Auth screen */
@@ -107,7 +236,7 @@ a:hover {
 
 /* Layout */
 .page {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 32px 24px;
 }
@@ -200,6 +329,44 @@ a:hover {
 .badge-red    { background: var(--red-bg); color: var(--red); }
 .badge-purple { background: var(--purple-bg); color: var(--purple); }
 .badge-gray   { background: var(--gray-bg); color: var(--text-muted); }
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.filter-bar select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Secondary "Active/Closed" pill, separate from case_status */
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.pill-active { background: var(--green-bg); color: var(--green); }
+.pill-closed { background: var(--gray-bg); color: var(--text-muted); }
+
+.chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #e8f1fb;
+  color: var(--blue);
+}
 
 /* Empty state */
 .empty-state {
