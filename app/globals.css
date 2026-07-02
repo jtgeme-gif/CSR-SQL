@@ -63,12 +63,12 @@ a:hover {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   color: var(--text);
-  padding: 8px 24px;
-  height: 64px;
+  padding: 10px 24px;
+  height: 96px;
   box-sizing: border-box;
 }
 .top-bar-logo img {
-  height: 44px;
+  height: 80px;
   width: auto;
   display: block;
 }
