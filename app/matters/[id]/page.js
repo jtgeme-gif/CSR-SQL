@@ -95,6 +95,7 @@ export default function MatterDetailPage() {
       date_opened: coreForm.date_opened || null,
       court_case_number: coreForm.court_case_number || null,
       client_insurer_entity_id: coreForm.client_insurer_entity_id || null,
+      file_number: coreForm.file_number || null,
     };
     const { error } = await supabase.from('matters').update(payload).eq('id', matterId);
     setSavingCore(false);
@@ -203,8 +204,8 @@ export default function MatterDetailPage() {
   const magJudgeRows = casePeople.filter((cp) => cp.role === 'Magistrate Judge');
   const mediatorRows = casePeople.filter((cp) => cp.role === 'Mediator');
 
-  // Build "Our File" / "Client File" strings from case_entities
-  const fileNumbers = caseEntities.filter((ce) => ce.file_number).map((ce) => `${ce.file_number} (${ce.entities?.name})`).join(' / ');
+  // "Our File" is now a simple matter-level field (typed manually,
+  // including multi-defendant strings like "1979.1807 // 1979.1810").
   const clientFileNumbers = caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ');
 
   function partiesForRole(role) {
@@ -329,7 +330,7 @@ export default function MatterDetailPage() {
 
       {/* INFO BAR */}
       <div className="info-bar">
-        <span><strong>Our File:</strong> {fileNumbers || '—'}</span>
+        <span><strong>Our File:</strong> {matter.file_number || '—'}</span>
         <span><strong>Client File:</strong> {clientFileNumbers || '—'}</span>
         <span className="info-bar-link">📁 File Folder</span>
         <span className="info-bar-link">📓 OneNote</span>
@@ -396,6 +397,7 @@ export default function MatterDetailPage() {
             {coreForm.case_status === 'Appeal' && (
               <div className="form-field"><label>Appellate Case Number</label><input value={coreForm.appellate_case_number || ''} onChange={(e) => updateCore('appellate_case_number', e.target.value)} /></div>
             )}
+            <div className="form-field"><label>File Number</label><input value={coreForm.file_number || ''} onChange={(e) => updateCore('file_number', e.target.value)} placeholder="e.g. 1979.1807 // 1979.1810" /></div>
             <div className="form-row">
               <div className="form-field"><label>Date Opened</label><input type="date" value={coreForm.date_opened || ''} onChange={(e) => updateCore('date_opened', e.target.value)} /></div>
               <div className="form-field"><label>Court Case Number</label><input value={coreForm.court_case_number || ''} onChange={(e) => updateCore('court_case_number', e.target.value)} /></div>

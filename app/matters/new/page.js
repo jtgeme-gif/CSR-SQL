@@ -16,6 +16,7 @@ export default function NewMatterPage() {
     date_opened: '',
     incident_date: '',
     court_case_number: '',
+    file_number: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -40,6 +41,7 @@ export default function NewMatterPage() {
       date_opened: form.date_opened || null,
       incident_date: form.incident_date || null,
       court_case_number: form.court_case_number.trim() || null,
+      file_number: form.file_number.trim() || null,
     };
 
     const { data, error } = await supabase.from('matters').insert(payload).select().single();
@@ -99,6 +101,16 @@ export default function NewMatterPage() {
             <label>Incident Date</label>
             <input type="date" value={form.incident_date} onChange={(e) => update('incident_date', e.target.value)} />
           </div>
+        </div>
+
+        <div className="form-field">
+          <label>File Number</label>
+          <input
+            type="text"
+            value={form.file_number}
+            onChange={(e) => update('file_number', e.target.value)}
+            placeholder="e.g. 1979.1807 or 1979.1807 // 1979.1810"
+          />
         </div>
 
         <div className="form-field">
