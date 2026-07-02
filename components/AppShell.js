@@ -65,6 +65,9 @@ export default function AppShell({ session, onSignOut, children }) {
             <span className="nav-item disabled">Upcoming Deadlines</span>
 
             <div className="nav-section-label">Contacts</div>
+            <Link href="/directory" className={`nav-item ${isActive('/directory') ? 'active' : ''}`}>
+              Full Directory
+            </Link>
             <Link href="/entities" className={`nav-item ${isActive('/entities') ? 'active' : ''}`}>
               Entities/Municipalities
             </Link>

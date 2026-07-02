@@ -649,6 +649,18 @@ a:hover {
   margin-bottom: 4px;
 }
 
+.table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.table th.sortable:hover {
+  color: var(--navy);
+}
+.chip-entity {
+  background: var(--purple-bg);
+  color: var(--purple);
+}
+
 /* Detail view */
 .detail-grid {
   display: grid;
