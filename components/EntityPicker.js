@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabaseClient';
 
 // Controlled combobox: search existing Entities, or create a new one inline.
 // Props: value (entity id or ''), valueName (display name for the current value),
-// onChange(entityId, entityName)
+// onChange(entityId, entityName, entityRecord) — entityRecord is the full row
+// (used by parent forms to auto-fill address fields), or null when cleared/typing.
 export default function EntityPicker({ value, valueName, onChange }) {
   const [entities, setEntities] = useState([]);
   const [inputValue, setInputValue] = useState(valueName || '');
@@ -14,7 +15,7 @@ export default function EntityPicker({ value, valueName, onChange }) {
   const wrapperRef = useRef(null);
 
   useEffect(() => {
-    supabase.from('entities').select('id, name').order('name').then(({ data }) => {
+    supabase.from('entities').select('*').order('name').then(({ data }) => {
       setEntities(data || []);
     });
   }, []);
@@ -42,13 +43,13 @@ export default function EntityPicker({ value, valueName, onChange }) {
 
   function selectEntity(ent) {
     setInputValue(ent.name);
-    onChange(ent.id, ent.name);
+    onChange(ent.id, ent.name, ent);
     setOpen(false);
   }
 
   function clearSelection() {
     setInputValue('');
-    onChange(null, '');
+    onChange(null, '', null);
   }
 
   async function createEntity() {
@@ -65,7 +66,7 @@ export default function EntityPicker({ value, valueName, onChange }) {
       alert('Could not create entity: ' + error.message);
       return;
     }
-    setEntities((prev) => [...prev, { id: data.id, name: data.name }]);
+    setEntities((prev) => [...prev, data]);
     selectEntity(data);
   }
 
@@ -78,7 +79,7 @@ export default function EntityPicker({ value, valueName, onChange }) {
         onChange={(e) => {
           setInputValue(e.target.value);
           setOpen(true);
-          if (value) onChange(null, ''); // typing clears a prior selection until re-picked
+          if (value) onChange(null, '', null); // typing clears a prior selection until re-picked
         }}
         onFocus={() => setOpen(true)}
       />
@@ -99,9 +100,6 @@ export default function EntityPicker({ value, valueName, onChange }) {
             <div className="entity-picker-option entity-picker-create" onClick={createEntity}>
               {creating ? 'Creating…' : `+ Add "${inputValue.trim()}" as a new entity`}
             </div>
-          )}
-          {matches.length === 0 && exactMatch === false && inputValue.trim() === '' && (
-            <div className="entity-picker-empty">Start typing to search…</div>
           )}
         </div>
       )}

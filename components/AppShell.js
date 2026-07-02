@@ -64,12 +64,18 @@ export default function AppShell({ session, onSignOut, children }) {
             </Link>
             <span className="nav-item disabled">Upcoming Deadlines</span>
 
-            <div className="nav-section-label">Directories</div>
-            <Link href="/people" className={`nav-item ${isActive('/people') ? 'active' : ''}`}>
-              People
-            </Link>
+            <div className="nav-section-label">Contacts</div>
             <Link href="/entities" className={`nav-item ${isActive('/entities') ? 'active' : ''}`}>
-              Entities
+              Entities/Municipalities
+            </Link>
+            <Link href="/people/judges" className={`nav-item ${isActive('/people/judges') ? 'active' : ''}`}>
+              Judges
+            </Link>
+            <Link href="/people/attorneys" className={`nav-item ${isActive('/people/attorneys') ? 'active' : ''}`}>
+              Attorneys
+            </Link>
+            <Link href="/people/mediators" className={`nav-item ${isActive('/people/mediators') ? 'active' : ''}`}>
+              Mediators
             </Link>
 
             <div className="nav-section-label">Admin</div>

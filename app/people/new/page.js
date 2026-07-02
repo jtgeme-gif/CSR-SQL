@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import EntityPicker from '../../../components/EntityPicker';
 
-const IDENTITIES = ['Individual', 'Attorney', 'Judge'];
+const IDENTITIES = ['Individual', 'Attorney', 'Judge', 'Client Rep'];
 
 export default function NewPersonPage() {
   const router = useRouter();
@@ -24,6 +24,18 @@ export default function NewPersonPage() {
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  function handleEntityChange(id, name, entityRecord) {
+    update('entity_id', id);
+    update('entity_name', name);
+    // Auto-fill address from the entity as a starting point — still editable after.
+    if (entityRecord) {
+      update('address', entityRecord.address || '');
+      update('city', entityRecord.city || '');
+      update('state', entityRecord.state || '');
+      update('zip', entityRecord.zip || '');
+    }
   }
 
   async function handleSubmit(e) {
@@ -112,10 +124,7 @@ export default function NewPersonPage() {
           <EntityPicker
             value={form.entity_id}
             valueName={form.entity_name}
-            onChange={(id, name) => {
-              update('entity_id', id);
-              update('entity_name', name);
-            }}
+            onChange={handleEntityChange}
           />
         </div>
 
