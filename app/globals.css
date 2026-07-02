@@ -125,9 +125,10 @@ a:hover {
   gap: 24px;
 }
 .sidebar-logo {
+  background: #fff;
+  margin: -20px -16px 0 -16px;
+  padding: 20px 16px 16px;
   text-align: center;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.12);
 }
 .sidebar-logo img {
   max-width: 160px;
