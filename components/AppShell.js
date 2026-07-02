@@ -53,7 +53,7 @@ export default function AppShell({ session, onSignOut, children }) {
         <aside className="sidebar">
           <div className="sidebar-logo">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/mmm-logo-transparent.png" alt="McGraw Morris Masud" />
+            <img src="/mmm-logo-official.png" alt="McGraw Morris Masud" />
           </div>
 
           <nav className="sidebar-nav">
