@@ -60,17 +60,16 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  padding: 10px 24px;
-  height: 96px;
+  background: var(--navy);
+  color: #fff;
+  padding: 12px 24px;
+  height: 56px;
   box-sizing: border-box;
 }
-.top-bar-logo img {
-  height: 80px;
-  width: auto;
-  display: block;
+.brand {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.02em;
 }
 .top-bar-right {
   display: flex;
@@ -97,21 +96,21 @@ a:hover {
   flex-shrink: 0;
 }
 .user-name {
-  color: var(--navy);
+  color: #e6edf6;
   font-weight: 600;
 }
 .btn-signout {
-  background: var(--navy);
-  border: 1px solid var(--navy);
+  background: none;
+  border: 1px solid rgba(255,255,255,0.35);
   border-radius: var(--radius);
-  color: #fff;
+  color: #e6edf6;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   padding: 8px 14px;
 }
 .btn-signout:hover {
-  background: #0f1a2d;
+  background: rgba(255,255,255,0.08);
 }
 
 /* Sidebar */
@@ -129,12 +128,21 @@ a:hover {
   text-align: center;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(255,255,255,0.12);
+  background: #fff;
+  border-radius: var(--radius);
+  padding-top: 12px;
+}
+.sidebar-logo img {
+  max-width: 160px;
+  height: auto;
+  margin-bottom: 8px;
 }
 .sidebar-wordmark {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: #9fb3cc;
+  color: var(--navy);
+  padding-bottom: 8px;
 }
 .sidebar-nav {
   display: flex;
