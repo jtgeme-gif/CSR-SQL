@@ -97,12 +97,12 @@ a:hover {
   flex-shrink: 0;
 }
 .user-name {
-  color: var(--blue);
+  color: var(--navy);
   font-weight: 600;
 }
 .btn-signout {
-  background: var(--blue);
-  border: 1px solid var(--blue);
+  background: var(--navy);
+  border: 1px solid var(--navy);
   border-radius: var(--radius);
   color: #fff;
   font-size: 12px;
@@ -111,7 +111,7 @@ a:hover {
   padding: 8px 14px;
 }
 .btn-signout:hover {
-  background: #245a91;
+  background: #0f1a2d;
 }
 
 /* Sidebar */
