@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import PersonModal from '../../components/PersonModal';
+import EntityModal from '../../components/EntityModal';
 
 export default function EntitiesPage() {
   const [entities, setEntities] = useState([]);
@@ -13,6 +14,7 @@ export default function EntitiesPage() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [modalPersonId, setModalPersonId] = useState(null);
+  const [modalEntityId, setModalEntityId] = useState(null);
 
   useEffect(() => {
     load();
@@ -88,6 +90,12 @@ export default function EntitiesPage() {
                   <span className="entity-accordion-name">{e.name}</span>
                   <span className="entity-accordion-count">{people.length} {people.length === 1 ? 'person' : 'people'}</span>
                   <span className="entity-accordion-meta">{[e.city, e.state].filter(Boolean).join(', ')}</span>
+                  <button
+                    className="btn-small"
+                    onClick={(ev) => { ev.stopPropagation(); setModalEntityId(e.id); }}
+                  >
+                    Edit
+                  </button>
                 </div>
                 {isOpen && (
                   <div className="entity-accordion-body">
@@ -111,6 +119,9 @@ export default function EntitiesPage() {
 
       {modalPersonId && (
         <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />
+      )}
+      {modalEntityId && (
+        <EntityModal entityId={modalEntityId} onClose={() => setModalEntityId(null)} onChanged={load} />
       )}
     </div>
   );

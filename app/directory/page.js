@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import PersonModal from '../../components/PersonModal';
+import EntityModal from '../../components/EntityModal';
 
 export default function DirectoryPage() {
-  const router = useRouter();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,6 +14,7 @@ export default function DirectoryPage() {
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [modalPersonId, setModalPersonId] = useState(null);
+  const [modalEntityId, setModalEntityId] = useState(null);
 
   useEffect(() => {
     load();
@@ -94,7 +94,7 @@ export default function DirectoryPage() {
     if (r.recordType === 'Person') {
       setModalPersonId(r.id);
     } else {
-      router.push('/entities');
+      setModalEntityId(r.id);
     }
   }
 
@@ -163,6 +163,9 @@ export default function DirectoryPage() {
 
       {modalPersonId && (
         <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />
+      )}
+      {modalEntityId && (
+        <EntityModal entityId={modalEntityId} onClose={() => setModalEntityId(null)} onChanged={load} />
       )}
     </div>
   );
