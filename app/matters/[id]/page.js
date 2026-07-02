@@ -11,33 +11,38 @@ import EntityModal from '../../../components/EntityModal';
 
 const PRACTICE_GROUPS = ['Auto-Neg', 'Business', 'Police', 'Labor-Employment', 'Municipal', 'Zoning', 'School'];
 const CASE_STATUSES = ['Pre-litigation Monitoring', 'Active Litigation', 'Stayed', 'Closed', 'Appeal'];
-const ENTITY_ROLES = ['Plaintiff', 'Defendant', 'Co-Defendant', 'Client'];
-const PERSON_ROLES = [
-  'Plaintiff', 'Defendant', 'Co-Defendant', 'Witness', 'Expert',
-  'Plaintiff Attorney', 'Defense Attorney', 'Co-Defendant Attorney',
-  'Judge', 'Magistrate Judge', 'Mediator', 'POC', 'Client Rep',
-];
+const PARTY_ROLES = ['Plaintiff', 'Defendant', 'Co-Defendant'];
+const TABS = ['Overview', 'Case', 'Scheduling', 'Discovery & Depositions', 'Witnesses & Exhibits', 'Motions & Briefs', 'Mediation & Demands', 'Notes', 'Tasks', 'CSR', 'Subpoenas'];
 
 export default function MatterDetailPage() {
   const params = useParams();
   const matterId = params.id;
 
   const [matter, setMatter] = useState(null);
-  const [clientInsurerName, setClientInsurerName] = useState('');
   const [staff, setStaff] = useState([]);
   const [caseEntities, setCaseEntities] = useState([]);
   const [casePeople, setCasePeople] = useState([]);
+  const [claimReps, setClaimReps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [editingCore, setEditingCore] = useState(false);
   const [coreForm, setCoreForm] = useState(null);
   const [savingCore, setSavingCore] = useState(false);
+  const [clientInsurerName, setClientInsurerName] = useState('');
 
   const [newStaffName, setNewStaffName] = useState('');
+  const [newClaimRep, setNewClaimRep] = useState({ person_id: null, person_name: '', claim_number: '', label: '' });
 
-  const [entityPartyForm, setEntityPartyForm] = useState({ entity_id: null, entity_name: '', role: 'Defendant', file_number: '', claim_rep_file_number: '' });
-  const [personPartyForm, setPersonPartyForm] = useState({ person_id: null, person_name: '', role: 'Witness', capacity: '', poc_entity_id: '' });
+  const [newJudge, setNewJudge] = useState({ person_id: null, person_name: '' });
+  const [newMagJudge, setNewMagJudge] = useState({ person_id: null, person_name: '' });
+  const [newMediator, setNewMediator] = useState({ person_id: null, person_name: '' });
+
+  // per-role add-party forms
+  const [addEntityForm, setAddEntityForm] = useState({});
+  const [addPersonForm, setAddPersonForm] = useState({});
+  // per-party nested add forms (keyed by "entity-<id>" or "person-<id>")
+  const [nestedAddForm, setNestedAddForm] = useState({});
 
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
@@ -52,11 +57,7 @@ export default function MatterDetailPage() {
     setError(null);
 
     const { data: m, error: mErr } = await supabase.from('matters').select('*').eq('id', matterId).single();
-    if (mErr) {
-      setError(mErr.message);
-      setLoading(false);
-      return;
-    }
+    if (mErr) { setError(mErr.message); setLoading(false); return; }
     setMatter(m);
     setCoreForm(m);
 
@@ -70,19 +71,20 @@ export default function MatterDetailPage() {
     const { data: staffData } = await supabase.from('matter_staff').select('*').eq('matter_id', matterId).order('created_at');
     setStaff(staffData || []);
 
-    const { data: ceData } = await supabase.from('case_entities').select('*, entities(name)').eq('matter_id', matterId);
+    const { data: ceData } = await supabase.from('case_entities').select('*, entities(id, name)').eq('matter_id', matterId);
     setCaseEntities(ceData || []);
 
-    const { data: cpData } = await supabase.from('case_people').select('*, people(first_name, last_name)').eq('matter_id', matterId);
+    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1)').eq('matter_id', matterId);
     setCasePeople(cpData || []);
+
+    const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1)').eq('matter_id', matterId).order('created_at');
+    setClaimReps(crData || []);
 
     setLoading(false);
   }
 
   // ---------- Core info ----------
-  function updateCore(field, value) {
-    setCoreForm((f) => ({ ...f, [field]: value }));
-  }
+  function updateCore(field, value) { setCoreForm((f) => ({ ...f, [field]: value })); }
 
   async function saveCore() {
     setSavingCore(true);
@@ -96,10 +98,7 @@ export default function MatterDetailPage() {
     };
     const { error } = await supabase.from('matters').update(payload).eq('id', matterId);
     setSavingCore(false);
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) { alert(error.message); return; }
     setEditingCore(false);
     load();
   }
@@ -112,66 +111,87 @@ export default function MatterDetailPage() {
   // ---------- Assigned staff ----------
   async function addStaff() {
     if (!newStaffName.trim()) return;
-    const { error } = await supabase.from('matter_staff').insert({ matter_id: matterId, staff_name: newStaffName.trim() });
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    await supabase.from('matter_staff').insert({ matter_id: matterId, staff_name: newStaffName.trim() });
     setNewStaffName('');
     load();
   }
-  async function removeStaff(id) {
-    await supabase.from('matter_staff').delete().eq('id', id);
-    load();
-  }
+  async function removeStaff(id) { await supabase.from('matter_staff').delete().eq('id', id); load(); }
 
-  // ---------- Entity parties ----------
-  async function addEntityParty() {
-    if (!entityPartyForm.entity_id) {
-      alert('Pick or create an entity first.');
-      return;
-    }
-    const { error } = await supabase.from('case_entities').insert({
+  // ---------- Claim reps ----------
+  async function addClaimRep() {
+    if (!newClaimRep.person_id) { alert('Pick or create a claim rep first.'); return; }
+    const { error } = await supabase.from('matter_claim_reps').insert({
       matter_id: matterId,
-      entity_id: entityPartyForm.entity_id,
-      role: entityPartyForm.role,
-      file_number: entityPartyForm.file_number.trim() || null,
-      claim_rep_file_number: entityPartyForm.claim_rep_file_number.trim() || null,
+      person_id: newClaimRep.person_id,
+      claim_number: newClaimRep.claim_number.trim() || null,
+      label: newClaimRep.label.trim() || null,
     });
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    setEntityPartyForm({ entity_id: null, entity_name: '', role: 'Defendant', file_number: '', claim_rep_file_number: '' });
+    if (error) { alert(error.message); return; }
+    setNewClaimRep({ person_id: null, person_name: '', claim_number: '', label: '' });
     load();
   }
-  async function removeEntityParty(id) {
-    await supabase.from('case_entities').delete().eq('id', id);
-    load();
-  }
+  async function removeClaimRep(id) { await supabase.from('matter_claim_reps').delete().eq('id', id); load(); }
 
-  // ---------- Person parties ----------
-  async function addPersonParty() {
-    if (!personPartyForm.person_id) {
-      alert('Pick or create a person first.');
-      return;
-    }
+  // ---------- Court & Jurisdiction ----------
+  async function addCourtRole(role, picked, resetFn) {
+    if (!picked.person_id) { alert('Pick or create a person first.'); return; }
+    const { error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: picked.person_id, role });
+    if (error) { alert(error.message); return; }
+    resetFn({ person_id: null, person_name: '' });
+    load();
+  }
+  async function removeCasePerson(id) { await supabase.from('case_people').delete().eq('id', id); load(); }
+
+  // ---------- Parties ----------
+  function entityFormFor(role) { return addEntityForm[role] || { entity_id: null, entity_name: '' }; }
+  function personFormFor(role) { return addPersonForm[role] || { person_id: null, person_name: '' }; }
+
+  async function addEntityParty(role) {
+    const f = entityFormFor(role);
+    if (!f.entity_id) { alert('Pick or create an entity first.'); return; }
+    const { error } = await supabase.from('case_entities').insert({ matter_id: matterId, entity_id: f.entity_id, role });
+    if (error) { alert(error.message); return; }
+    setAddEntityForm((s) => ({ ...s, [role]: { entity_id: null, entity_name: '' } }));
+    load();
+  }
+  async function addPersonParty(role) {
+    const f = personFormFor(role);
+    if (!f.person_id) { alert('Pick or create a person first.'); return; }
+    const { error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: f.person_id, role });
+    if (error) { alert(error.message); return; }
+    setAddPersonForm((s) => ({ ...s, [role]: { person_id: null, person_name: '' } }));
+    load();
+  }
+  async function removeEntityParty(id) { await supabase.from('case_entities').delete().eq('id', id); load(); }
+  async function removePersonParty(id) { await supabase.from('case_people').delete().eq('id', id); load(); }
+
+  // Nested POC (defendant entities) / Attorney (plaintiff & co-defendant parties)
+  function nestedKey(kind, id) { return `${kind}-${id}`; }
+  function nestedFormFor(key) { return nestedAddForm[key] || { person_id: null, person_name: '' }; }
+  function updateNestedForm(key, val) { setNestedAddForm((s) => ({ ...s, [key]: val })); }
+
+  async function addPOC(caseEntityId, entityGlobalId) {
+    const key = nestedKey('poc', caseEntityId);
+    const f = nestedFormFor(key);
+    if (!f.person_id) { alert('Pick or create a person first.'); return; }
     const { error } = await supabase.from('case_people').insert({
-      matter_id: matterId,
-      person_id: personPartyForm.person_id,
-      role: personPartyForm.role,
-      capacity: personPartyForm.capacity.trim() || null,
-      poc_entity_id: personPartyForm.role === 'POC' ? (personPartyForm.poc_entity_id || null) : null,
+      matter_id: matterId, person_id: f.person_id, role: 'POC', poc_entity_id: entityGlobalId,
     });
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    setPersonPartyForm({ person_id: null, person_name: '', role: 'Witness', capacity: '', poc_entity_id: '' });
+    if (error) { alert(error.message); return; }
+    updateNestedForm(key, { person_id: null, person_name: '' });
     load();
   }
-  async function removePersonParty(id) {
-    await supabase.from('case_people').delete().eq('id', id);
+
+  async function addAttorney(partyKind, partyId) {
+    const key = nestedKey('atty-' + partyKind, partyId);
+    const f = nestedFormFor(key);
+    if (!f.person_id) { alert('Pick or create an attorney first.'); return; }
+    const payload = { matter_id: matterId, person_id: f.person_id, role: 'Attorney' };
+    if (partyKind === 'entity') payload.represents_case_entity_id = partyId;
+    else payload.represents_case_person_id = partyId;
+    const { error } = await supabase.from('case_people').insert(payload);
+    if (error) { alert(error.message); return; }
+    updateNestedForm(key, { person_id: null, person_name: '' });
     load();
   }
 
@@ -179,19 +199,151 @@ export default function MatterDetailPage() {
   if (error) return <div className="page"><div className="error-box">{error}</div></div>;
   if (!matter) return null;
 
+  const judgeRows = casePeople.filter((cp) => cp.role === 'Judge');
+  const magJudgeRows = casePeople.filter((cp) => cp.role === 'Magistrate Judge');
+  const mediatorRows = casePeople.filter((cp) => cp.role === 'Mediator');
+
+  // Build "Our File" / "Client File" strings from case_entities
+  const fileNumbers = caseEntities.filter((ce) => ce.file_number).map((ce) => `${ce.file_number} (${ce.entities?.name})`).join(' / ');
+  const clientFileNumbers = caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ');
+
+  function partiesForRole(role) {
+    const entities = caseEntities.filter((ce) => ce.role === role);
+    const people = casePeople.filter((cp) => cp.role === role);
+    return { entities, people };
+  }
+
+  function renderPartyGroup(role) {
+    const { entities, people } = partiesForRole(role);
+    const eForm = entityFormFor(role);
+    const pForm = personFormFor(role);
+
+    return (
+      <div className="party-group" key={role}>
+        <div className="party-group-title">{role}s</div>
+
+        {entities.length === 0 && people.length === 0 && <p className="muted" style={{ margin: '4px 0 10px' }}>None yet.</p>}
+
+        {entities.map((ce) => {
+          const pocKey = nestedKey('poc', ce.id);
+          const pocForm = nestedFormFor(pocKey);
+          const pocs = casePeople.filter((cp) => cp.role === 'POC' && cp.poc_entity_id === ce.entities?.id);
+          const attyKey = nestedKey('atty-entity', ce.id);
+          const attyForm = nestedFormFor(attyKey);
+          const attys = casePeople.filter((cp) => cp.role === 'Attorney' && cp.represents_case_entity_id === ce.id);
+
+          return (
+            <div key={ce.id} className="party-card">
+              <div className="party-card-header">
+                <a className="row-link" onClick={() => setModalEntityId(ce.entities?.id)}>{ce.entities?.name}</a>
+                <span className="badge badge-blue">Entity</span>
+                <button className="btn-small btn-small-danger" onClick={() => removeEntityParty(ce.id)}>Remove</button>
+              </div>
+
+              {role === 'Defendant' && (
+                <div className="nested-block">
+                  <span className="nested-label">POC(s):</span>
+                  {pocs.map((p) => (
+                    <span key={p.id} className="chip chip-removable">
+                      {p.people?.first_name} {p.people?.last_name}
+                      <button onClick={() => removeCasePerson(p.id)}>×</button>
+                    </span>
+                  ))}
+                  <div className="nested-add-row">
+                    <PersonPicker value={pocForm.person_id} valueName={pocForm.person_name} onChange={(id, name) => updateNestedForm(pocKey, { person_id: id, person_name: name })} />
+                    <button className="btn-small" onClick={() => addPOC(ce.id, ce.entities?.id)}>+ Add POC</button>
+                  </div>
+                </div>
+              )}
+
+              {(role === 'Plaintiff' || role === 'Co-Defendant') && (
+                <div className="nested-block">
+                  <span className="nested-label">Attorney(s):</span>
+                  {attys.map((a) => (
+                    <span key={a.id} className="chip chip-removable">
+                      {a.people?.first_name} {a.people?.last_name}
+                      <button onClick={() => removeCasePerson(a.id)}>×</button>
+                    </span>
+                  ))}
+                  <div className="nested-add-row">
+                    <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                    <button className="btn-small" onClick={() => addAttorney('entity', ce.id)}>+ Add Attorney</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {people.map((cp) => {
+          const attyKey = nestedKey('atty-person', cp.id);
+          const attyForm = nestedFormFor(attyKey);
+          const attys = casePeople.filter((c) => c.role === 'Attorney' && c.represents_case_person_id === cp.id);
+
+          return (
+            <div key={cp.id} className="party-card">
+              <div className="party-card-header">
+                <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{cp.people?.first_name} {cp.people?.last_name}</a>
+                <span className="badge badge-gray">Person</span>
+                <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>
+              </div>
+
+              {(role === 'Plaintiff' || role === 'Co-Defendant') && (
+                <div className="nested-block">
+                  <span className="nested-label">Attorney(s):</span>
+                  {attys.map((a) => (
+                    <span key={a.id} className="chip chip-removable">
+                      {a.people?.first_name} {a.people?.last_name}
+                      <button onClick={() => removeCasePerson(a.id)}>×</button>
+                    </span>
+                  ))}
+                  <div className="nested-add-row">
+                    <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                    <button className="btn-small" onClick={() => addAttorney('person', cp.id)}>+ Add Attorney</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div className="add-party-form">
+          <EntityPicker value={eForm.entity_id} valueName={eForm.entity_name} onChange={(id, name) => setAddEntityForm((s) => ({ ...s, [role]: { entity_id: id, entity_name: name } }))} />
+          <button className="btn-small" onClick={() => addEntityParty(role)}>+ Add Entity</button>
+          <PersonPicker value={pForm.person_id} valueName={pForm.person_name} onChange={(id, name) => setAddPersonForm((s) => ({ ...s, [role]: { person_id: id, person_name: name } }))} />
+          <button className="btn-small" onClick={() => addPersonParty(role)}>+ Add Person</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-header" style={{ display: 'block' }}>
         <Link href="/" className="back-link">← All Matters</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <h1>{matter.case_name}</h1>
-          <button className="star-toggle" onClick={toggleStar} title="Star this matter">
-            {matter.starred ? '★' : '☆'}
-          </button>
+          <button className="star-toggle" onClick={toggleStar} title="Star this matter">{matter.starred ? '★' : '☆'}</button>
         </div>
       </div>
 
-      {/* CORE INFO */}
+      {/* INFO BAR */}
+      <div className="info-bar">
+        <span><strong>Our File:</strong> {fileNumbers || '—'}</span>
+        <span><strong>Client File:</strong> {clientFileNumbers || '—'}</span>
+        <span className="info-bar-link">📁 File Folder</span>
+        <span className="info-bar-link">📓 OneNote</span>
+        <span><strong>Answer Due:</strong> —</span>
+      </div>
+
+      {/* TAB ROW */}
+      <div className="tab-row">
+        {TABS.map((t, i) => (
+          <span key={t} className={`tab-item ${i === 0 ? 'active' : 'disabled'}`}>{t}</span>
+        ))}
+      </div>
+
+      {/* CASE OVERVIEW */}
       <div className="section-card">
         <div className="section-card-header">
           <h3>Case Overview</h3>
@@ -199,16 +351,28 @@ export default function MatterDetailPage() {
         </div>
 
         {!editingCore && (
-          <div className="detail-grid">
-            <div className="detail-card"><span className="detail-label">Practice Group</span><span className="detail-value">{matter.practice_group || '—'}</span></div>
-            <div className="detail-card"><span className="detail-label">Case Status</span><span className="detail-value">{matter.case_status || '—'}</span></div>
-            {matter.case_status === 'Appeal' && (
-              <div className="detail-card"><span className="detail-label">Appellate Case Number</span><span className="detail-value">{matter.appellate_case_number || '—'}</span></div>
-            )}
-            <div className="detail-card"><span className="detail-label">Date Opened</span><span className="detail-value">{matter.date_opened ? new Date(matter.date_opened).toLocaleDateString() : '—'}</span></div>
-            <div className="detail-card"><span className="detail-label">Court Case Number</span><span className="detail-value">{matter.court_case_number || '—'}</span></div>
-            <div className="detail-card"><span className="detail-label">Client Insurer</span><span className="detail-value">{clientInsurerName || '—'}</span></div>
-          </div>
+          <>
+            <div className="detail-grid">
+              <div className="detail-card"><span className="detail-label">Practice Group</span><span className="detail-value">{matter.practice_group || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">Case Status</span><span className="detail-value">{matter.case_status || '—'}</span></div>
+              {matter.case_status === 'Appeal' && (
+                <div className="detail-card"><span className="detail-label">Appellate Case Number</span><span className="detail-value">{matter.appellate_case_number || '—'}</span></div>
+              )}
+              <div className="detail-card"><span className="detail-label">Date Opened</span><span className="detail-value">{matter.date_opened ? new Date(matter.date_opened).toLocaleDateString() : '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">Court Case Number</span><span className="detail-value">{matter.court_case_number || '—'}</span></div>
+            </div>
+            <div className="chip-row" style={{ marginTop: '12px' }}>
+              <span className="detail-label" style={{ marginRight: '8px' }}>ASSIGNED STAFF</span>
+              {staff.length === 0 && <span className="muted">Nobody assigned yet.</span>}
+              {staff.map((s) => (
+                <span key={s.id} className="chip chip-removable">{s.staff_name}<button onClick={() => removeStaff(s.id)}>×</button></span>
+              ))}
+            </div>
+            <div className="inline-add-row">
+              <input type="text" placeholder="Staff name" value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} />
+              <button className="btn-small" onClick={addStaff}>+ Add</button>
+            </div>
+          </>
         )}
 
         {editingCore && coreForm && (
@@ -230,28 +394,11 @@ export default function MatterDetailPage() {
               </div>
             </div>
             {coreForm.case_status === 'Appeal' && (
-              <div className="form-field">
-                <label>Appellate Case Number</label>
-                <input value={coreForm.appellate_case_number || ''} onChange={(e) => updateCore('appellate_case_number', e.target.value)} />
-              </div>
+              <div className="form-field"><label>Appellate Case Number</label><input value={coreForm.appellate_case_number || ''} onChange={(e) => updateCore('appellate_case_number', e.target.value)} /></div>
             )}
             <div className="form-row">
-              <div className="form-field">
-                <label>Date Opened</label>
-                <input type="date" value={coreForm.date_opened || ''} onChange={(e) => updateCore('date_opened', e.target.value)} />
-              </div>
-              <div className="form-field">
-                <label>Court Case Number</label>
-                <input value={coreForm.court_case_number || ''} onChange={(e) => updateCore('court_case_number', e.target.value)} />
-              </div>
-            </div>
-            <div className="form-field">
-              <label>Client Insurer</label>
-              <EntityPicker
-                value={coreForm.client_insurer_entity_id}
-                valueName={clientInsurerName}
-                onChange={(id, name) => { updateCore('client_insurer_entity_id', id); setClientInsurerName(name); }}
-              />
+              <div className="form-field"><label>Date Opened</label><input type="date" value={coreForm.date_opened || ''} onChange={(e) => updateCore('date_opened', e.target.value)} /></div>
+              <div className="form-field"><label>Court Case Number</label><input value={coreForm.court_case_number || ''} onChange={(e) => updateCore('court_case_number', e.target.value)} /></div>
             </div>
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={saveCore} disabled={savingCore}>{savingCore ? 'Saving…' : 'Save'}</button>
@@ -261,84 +408,72 @@ export default function MatterDetailPage() {
         )}
       </div>
 
-      {/* ASSIGNED STAFF */}
+      {/* CLIENT INSURER */}
       <div className="section-card">
-        <div className="section-card-header"><h3>Assigned Staff</h3></div>
-        <div className="chip-row">
-          {staff.length === 0 && <span className="muted">Nobody assigned yet.</span>}
-          {staff.map((s) => (
-            <span key={s.id} className="chip chip-removable">
-              {s.staff_name}
-              <button onClick={() => removeStaff(s.id)}>×</button>
-            </span>
+        <div className="section-card-header"><h3>Client Insurer</h3></div>
+        <div className="form-field" style={{ maxWidth: '360px' }}>
+          <EntityPicker
+            value={matter.client_insurer_entity_id}
+            valueName={clientInsurerName}
+            onChange={async (id, name) => {
+              await supabase.from('matters').update({ client_insurer_entity_id: id }).eq('id', matterId);
+              load();
+            }}
+          />
+        </div>
+
+        <div style={{ marginTop: '12px' }}>
+          {claimReps.length === 0 && <p className="muted">No claim reps added yet.</p>}
+          {claimReps.map((cr) => (
+            <div key={cr.id} className="party-row">
+              <a className="row-link" href={cr.people?.email1 ? `mailto:${cr.people.email1}` : undefined}>
+                {cr.people?.first_name} {cr.people?.last_name}
+              </a>
+              {cr.label && <span className="muted">{cr.label}</span>}
+              {cr.claim_number && <span className="muted">Claim# {cr.claim_number}</span>}
+              <button className="btn-small btn-small-danger" onClick={() => removeClaimRep(cr.id)}>Remove</button>
+            </div>
           ))}
         </div>
-        <div className="inline-add-row">
-          <input type="text" placeholder="Staff name" value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} />
-          <button className="btn-small" onClick={addStaff}>+ Add</button>
+
+        <div className="add-party-form">
+          <PersonPicker value={newClaimRep.person_id} valueName={newClaimRep.person_name} onChange={(id, name) => setNewClaimRep((f) => ({ ...f, person_id: id, person_name: name }))} />
+          <input type="text" placeholder="Claim #" value={newClaimRep.claim_number} onChange={(e) => setNewClaimRep((f) => ({ ...f, claim_number: e.target.value }))} />
+          <input type="text" placeholder="Label (e.g. Hancock)" value={newClaimRep.label} onChange={(e) => setNewClaimRep((f) => ({ ...f, label: e.target.value }))} />
+          <button className="btn-small" onClick={addClaimRep}>+ Add Claim Rep</button>
         </div>
       </div>
 
-      {/* ENTITY PARTIES */}
+      {/* COURT & JURISDICTION */}
       <div className="section-card">
-        <div className="section-card-header"><h3>Parties — Entities</h3></div>
-        {caseEntities.length === 0 && <p className="muted">No entities attached yet.</p>}
-        {caseEntities.map((ce) => (
-          <div key={ce.id} className="party-row">
-            <a className="row-link" onClick={() => setModalEntityId(ce.entity_id)}>{ce.entities?.name}</a>
-            <span className="badge badge-blue">{ce.role}</span>
-            {ce.file_number && <span className="muted">File# {ce.file_number}</span>}
-            {ce.claim_rep_file_number && <span className="muted">Claim# {ce.claim_rep_file_number}</span>}
-            <button className="btn-small btn-small-danger" onClick={() => removeEntityParty(ce.id)}>Remove</button>
+        <div className="section-card-header"><h3>Court & Jurisdiction</h3></div>
+
+        {[
+          { label: 'Judge', role: 'Judge', rows: judgeRows, form: newJudge, setForm: setNewJudge },
+          { label: 'Magistrate Judge', role: 'Magistrate Judge', rows: magJudgeRows, form: newMagJudge, setForm: setNewMagJudge },
+          { label: 'Mediator', role: 'Mediator', rows: mediatorRows, form: newMediator, setForm: setNewMediator },
+        ].map(({ label, role, rows, form, setForm }) => (
+          <div key={role} className="nested-block" style={{ marginBottom: '14px' }}>
+            <span className="nested-label">{label}:</span>
+            {rows.length === 0 && <span className="muted">None yet.</span>}
+            {rows.map((r) => (
+              <span key={r.id} className="chip chip-removable">
+                {r.people?.first_name} {r.people?.last_name}
+                <button onClick={() => removeCasePerson(r.id)}>×</button>
+              </span>
+            ))}
+            <div className="nested-add-row">
+              <PersonPicker value={form.person_id} valueName={form.person_name} onChange={(id, name) => setForm({ person_id: id, person_name: name })} />
+              <button className="btn-small" onClick={() => addCourtRole(role, form, setForm)}>+ Add</button>
+            </div>
           </div>
         ))}
-
-        <div className="add-party-form">
-          <EntityPicker
-            value={entityPartyForm.entity_id}
-            valueName={entityPartyForm.entity_name}
-            onChange={(id, name) => setEntityPartyForm((f) => ({ ...f, entity_id: id, entity_name: name }))}
-          />
-          <select value={entityPartyForm.role} onChange={(e) => setEntityPartyForm((f) => ({ ...f, role: e.target.value }))}>
-            {ENTITY_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <input type="text" placeholder="File #" value={entityPartyForm.file_number} onChange={(e) => setEntityPartyForm((f) => ({ ...f, file_number: e.target.value }))} />
-          <input type="text" placeholder="Claim Rep File #" value={entityPartyForm.claim_rep_file_number} onChange={(e) => setEntityPartyForm((f) => ({ ...f, claim_rep_file_number: e.target.value }))} />
-          <button className="btn-small" onClick={addEntityParty}>+ Add</button>
-        </div>
       </div>
 
-      {/* PERSON PARTIES */}
+      {/* PARTIES */}
       <div className="section-card">
-        <div className="section-card-header"><h3>Parties — People</h3></div>
-        {casePeople.length === 0 && <p className="muted">No people attached yet.</p>}
-        {casePeople.map((cp) => (
-          <div key={cp.id} className="party-row">
-            <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{cp.people?.first_name} {cp.people?.last_name}</a>
-            <span className="badge badge-blue">{cp.role}</span>
-            {cp.capacity && <span className="muted">{cp.capacity}</span>}
-            <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>
-          </div>
-        ))}
-
-        <div className="add-party-form">
-          <PersonPicker
-            value={personPartyForm.person_id}
-            valueName={personPartyForm.person_name}
-            onChange={(id, name) => setPersonPartyForm((f) => ({ ...f, person_id: id, person_name: name }))}
-          />
-          <select value={personPartyForm.role} onChange={(e) => setPersonPartyForm((f) => ({ ...f, role: e.target.value }))}>
-            {PERSON_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <input type="text" placeholder="Capacity (e.g. as PR of the Estate of...)" value={personPartyForm.capacity} onChange={(e) => setPersonPartyForm((f) => ({ ...f, capacity: e.target.value }))} />
-          {personPartyForm.role === 'POC' && (
-            <select value={personPartyForm.poc_entity_id} onChange={(e) => setPersonPartyForm((f) => ({ ...f, poc_entity_id: e.target.value }))}>
-              <option value="">POC for which entity?</option>
-              {caseEntities.map((ce) => <option key={ce.entity_id} value={ce.entity_id}>{ce.entities?.name}</option>)}
-            </select>
-          )}
-          <button className="btn-small" onClick={addPersonParty}>+ Add</button>
-        </div>
+        <div className="section-card-header"><h3>Parties</h3></div>
+        {PARTY_ROLES.map((role) => renderPartyGroup(role))}
       </div>
 
       {modalPersonId && <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />}
