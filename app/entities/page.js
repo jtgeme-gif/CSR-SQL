@@ -94,7 +94,7 @@ export default function EntitiesPage() {
                     className="btn-small"
                     onClick={(ev) => { ev.stopPropagation(); setModalEntityId(e.id); }}
                   >
-                    Edit
+                    View
                   </button>
                 </div>
                 {isOpen && (
