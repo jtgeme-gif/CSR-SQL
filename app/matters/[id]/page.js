@@ -311,31 +311,34 @@ export default function MatterDetailPage() {
   }
 
   return (
-    <div className="page">
-      <div className="page-header" style={{ display: 'block' }}>
-        <Link href="/" className="back-link">← All Matters</Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <h1>{matter.case_name}</h1>
-          <button className="star-toggle" onClick={toggleStar} title="Star this matter">{matter.starred ? '★' : '☆'}</button>
+    <div>
+      <div className="matter-sticky-top">
+        <div className="matter-title-row">
+          <Link href="/" className="back-link">← All Matters</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1>{matter.case_name}</h1>
+            <button className="star-toggle" onClick={toggleStar} title="Star this matter">{matter.starred ? '★' : '☆'}</button>
+          </div>
+        </div>
+
+        {/* INFO BAR */}
+        <div className="info-bar">
+          <span><strong>Our File:</strong> {matter.file_number || '—'}</span>
+          <span><strong>Client File:</strong> {caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ') || '—'}</span>
+          <span className="info-bar-link">📁 File Folder</span>
+          <span className="info-bar-link">📓 OneNote</span>
+          <span><strong>Answer Due:</strong> —</span>
+        </div>
+
+        {/* TAB ROW */}
+        <div className="tab-row">
+          {TABS.map((t, i) => (
+            <span key={t} className={`tab-item ${i === 0 ? 'active' : 'disabled'}`}>{t}</span>
+          ))}
         </div>
       </div>
 
-      {/* INFO BAR */}
-      <div className="info-bar">
-        <span><strong>Our File:</strong> {matter.file_number || '—'}</span>
-        <span><strong>Client File:</strong> {caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ') || '—'}</span>
-        <span className="info-bar-link">📁 File Folder</span>
-        <span className="info-bar-link">📓 OneNote</span>
-        <span><strong>Answer Due:</strong> —</span>
-      </div>
-
-      {/* TAB ROW */}
-      <div className="tab-row">
-        {TABS.map((t, i) => (
-          <span key={t} className={`tab-item ${i === 0 ? 'active' : 'disabled'}`}>{t}</span>
-        ))}
-      </div>
-
+      <div className="page">
       {/* CASE IDENTIFICATION */}
       <div className="section-card">
         <div className="section-card-header">
@@ -490,6 +493,7 @@ export default function MatterDetailPage() {
 
       {modalPersonId && <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />}
       {modalEntityId && <EntityModal entityId={modalEntityId} onClose={() => setModalEntityId(null)} onChanged={load} />}
+      </div>
     </div>
   );
 }

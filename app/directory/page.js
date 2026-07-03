@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import PersonModal from '../../components/PersonModal';
 import EntityModal from '../../components/EntityModal';
@@ -120,6 +121,8 @@ export default function DirectoryPage() {
             <option value="Person">People only</option>
             <option value="Entity">Entities only</option>
           </select>
+          <Link href="/people/new" className="btn btn-primary">+ Add Person</Link>
+          <Link href="/entities/new" className="btn btn-primary">+ Add Entity</Link>
         </div>
       </div>
 

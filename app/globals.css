@@ -754,6 +754,22 @@ a:hover {
   font-size: 13px;
 }
 
+/* Sticky matter header (title, info bar, tabs) — full width,
+   starts right at the sidebar edge, stays visible while the
+   content below it scrolls. */
+.matter-sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 24px 0;
+}
+.matter-title-row {
+  display: block;
+  margin-bottom: 10px;
+}
+
 /* Info bar */
 .info-bar {
   background: #eaf1fb;
@@ -765,7 +781,7 @@ a:hover {
   gap: 20px;
   font-size: 12px;
   color: var(--navy);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .info-bar-link {
   color: var(--blue);
@@ -777,8 +793,6 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
   padding-bottom: 0;
 }
 .tab-item {
