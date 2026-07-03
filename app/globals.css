@@ -555,6 +555,15 @@ a:hover {
   background: #fee2e2;
 }
 
+.btn-small.btn-primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+.btn-small.btn-primary:hover {
+  background: #245a91;
+}
+
 /* Row link / inline row actions */
 .popover {
   position: absolute;

@@ -260,12 +260,12 @@ export default function MatterDetailPage() {
     const href = mailtoHref(cp.people?.email1);
     const phone = formatPhoneDisplay(cp.people?.phone1);
     return (
-      <span key={cp.id} className="chip chip-removable" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '5px 10px' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span key={cp.id} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+        <span className="chip chip-removable">
           {href ? <a href={href}>{name}</a> : <span>{name}</span>}
           <button onClick={onRemove}>×</button>
         </span>
-        {phone && <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{phone}</span>}
+        {phone && <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{phone}</span>}
       </span>
     );
   }
@@ -368,7 +368,7 @@ export default function MatterDetailPage() {
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
                   <input
                     style={{ flex: 1, maxWidth: '280px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
-                    placeholder="as Guardian of Codi Smith"
+                    placeholder="Add capacity text"
                     value={capacityDraft}
                     onChange={(e) => setCapacityDraft(e.target.value)}
                   />
@@ -381,7 +381,7 @@ export default function MatterDetailPage() {
                   style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }}
                   onClick={() => { setEditingCapacityFor(cp.id); setCapacityDraft(cp.capacity || ''); }}
                 >
-                  {cp.capacity ? 'Edit capacity' : '+ Add capacity (e.g. Guardian, PR)'}
+                  {'Edit / Add Capacity'}
                 </div>
               )}
 
@@ -698,7 +698,7 @@ export default function MatterDetailPage() {
                     <input
                       value={partyModalForm.capacity}
                       onChange={(e) => setPartyModalForm((f) => ({ ...f, capacity: e.target.value }))}
-                      placeholder="as Guardian of Codi Smith"
+                      placeholder="Add capacity text"
                     />
                   </div>
                 </>
