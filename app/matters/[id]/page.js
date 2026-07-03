@@ -44,7 +44,7 @@ export default function MatterDetailPage() {
   const [newMediator, setNewMediator] = useState({ person_id: null, person_name: '' });
 
   const [partyModalRole, setPartyModalRole] = useState(null);
-  const [partyModalForm, setPartyModalForm] = useState({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '', capacity: '' });
+  const [partyModalForm, setPartyModalForm] = useState({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '', capacity: '', pro_se: false });
   const [savingParty, setSavingParty] = useState(false);
   const [nestedAddForm, setNestedAddForm] = useState({});
   const [openPopover, setOpenPopover] = useState(null);
@@ -75,7 +75,7 @@ export default function MatterDetailPage() {
     const { data: ceData } = await supabase.from('case_entities').select('*, entities(id, name)').eq('matter_id', matterId);
     setCaseEntities(ceData || []);
 
-    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1, phone1, website)').eq('matter_id', matterId);
+    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1, phone1, address, city, state, zip, website)').eq('matter_id', matterId);
     setCasePeople(cpData || []);
 
     const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1, entities(name))').eq('matter_id', matterId).order('created_at');
@@ -173,7 +173,7 @@ export default function MatterDetailPage() {
 
   // ---------- Parties ----------
   function openAddParty(role) {
-    setPartyModalForm({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '', capacity: '' });
+    setPartyModalForm({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '', capacity: '', pro_se: false });
     setPartyModalRole(role);
   }
 
@@ -187,7 +187,7 @@ export default function MatterDetailPage() {
     let newPartyId = null;
 
     if (f.partyType === 'Person') {
-      const { data, error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: f.person_id, role, capacity: f.capacity?.trim() || null }).select('id').single();
+      const { data, error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: f.person_id, role, capacity: f.capacity?.trim() || null, pro_se: role !== 'Defendant' ? !!f.pro_se : false }).select('id').single();
       if (error) { alert(error.message); setSavingParty(false); return; }
       newPartyId = data.id;
     } else {
@@ -196,7 +196,7 @@ export default function MatterDetailPage() {
       newPartyId = data.id;
     }
 
-    if (role !== 'Defendant' && f.attorney_id) {
+    if (role !== 'Defendant' && !f.pro_se && f.attorney_id) {
       const attyPayload = { matter_id: matterId, person_id: f.attorney_id, role: 'Attorney' };
       if (f.partyType === 'Person') attyPayload.represents_case_person_id = newPartyId;
       else attyPayload.represents_case_entity_id = newPartyId;
@@ -240,6 +240,12 @@ export default function MatterDetailPage() {
     if (error) { alert(error.message); return; }
     updateNestedForm(key, { person_id: null, person_name: '' });
     setOpenPopover(null);
+    load();
+  }
+
+  async function togglePartyProSe(cp) {
+    const { error } = await supabase.from('case_people').update({ pro_se: !cp.pro_se }).eq('id', cp.id);
+    if (error) { alert(error.message); return; }
     load();
   }
 
@@ -354,7 +360,8 @@ export default function MatterDetailPage() {
           const attyKey = nestedKey('atty-person', cp.id);
           const attyForm = nestedFormFor(attyKey);
           const attys = casePeople.filter((c) => c.role === 'Attorney' && c.represents_case_person_id === cp.id);
-          const displayName = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim() + (cp.capacity ? ` ${cp.capacity}` : '');
+          const displayName = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim() + (cp.capacity ? ` ${cp.capacity}` : '') + (cp.pro_se ? ' — Pro Se' : '');
+          const partyContactAddress = [cp.people?.address, cp.people?.city, cp.people?.state, cp.people?.zip].filter(Boolean).join(', ');
 
           return (
             <div key={cp.id} className="party-card">
@@ -386,22 +393,41 @@ export default function MatterDetailPage() {
               )}
 
               {(role === 'Plaintiff' || role === 'Co-Defendant') && (
-                <div className="nested-block">
-                  <span className="nested-label">Attorney(s):</span>
-                  {attys.map((a) => renderPersonChip(a, () => removeCasePerson(a.id)))}
-                  <span style={{ position: 'relative' }}>
-                    <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
-                    {openPopover === attyKey && (
-                      <div className="popover">
-                        <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
-                        <div className="modal-actions" style={{ marginTop: '8px' }}>
-                          <button className="btn-small btn-primary" onClick={() => addAttorney('person', cp.id)}>Add</button>
-                          <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
-                        </div>
-                      </div>
-                    )}
-                  </span>
+                <div className="form-checkbox" style={{ marginTop: '4px', marginBottom: 0 }}>
+                  <input type="checkbox" id={`prose-${cp.id}`} checked={!!cp.pro_se} onChange={() => togglePartyProSe(cp)} />
+                  <label htmlFor={`prose-${cp.id}`} style={{ fontSize: '11px' }}>Pro Se (no attorney)</label>
                 </div>
+              )}
+
+              {(role === 'Plaintiff' || role === 'Co-Defendant') && (
+                cp.pro_se ? (
+                  <div className="nested-block">
+                    <span className="nested-label">Contact:</span>
+                    <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      {cp.people?.email1 && <a href={mailtoHref(cp.people.email1)}>{cp.people.email1}</a>}
+                      {cp.people?.phone1 && <span>{formatPhoneDisplay(cp.people.phone1)}</span>}
+                      {partyContactAddress && <span>{partyContactAddress}</span>}
+                      {!cp.people?.email1 && !cp.people?.phone1 && !partyContactAddress && <span className="muted">No contact info on file.</span>}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="nested-block">
+                    <span className="nested-label">Attorney(s):</span>
+                    {attys.map((a) => renderPersonChip(a, () => removeCasePerson(a.id)))}
+                    <span style={{ position: 'relative' }}>
+                      <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
+                      {openPopover === attyKey && (
+                        <div className="popover">
+                          <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                          <div className="modal-actions" style={{ marginTop: '8px' }}>
+                            <button className="btn-small btn-primary" onClick={() => addAttorney('person', cp.id)}>Add</button>
+                            <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                    </span>
+                  </div>
+                )
               )}
             </div>
           );
@@ -701,6 +727,17 @@ export default function MatterDetailPage() {
                       placeholder="Add capacity text"
                     />
                   </div>
+                  {partyModalRole !== 'Defendant' && (
+                    <div className="form-checkbox">
+                      <input
+                        type="checkbox"
+                        id="party-pro-se"
+                        checked={!!partyModalForm.pro_se}
+                        onChange={(e) => setPartyModalForm((f) => ({ ...f, pro_se: e.target.checked }))}
+                      />
+                      <label htmlFor="party-pro-se">Pro Se (no attorney)</label>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="form-field">
@@ -713,7 +750,7 @@ export default function MatterDetailPage() {
                 </div>
               )}
 
-              {partyModalRole !== 'Defendant' && (
+              {partyModalRole !== 'Defendant' && !partyModalForm.pro_se && (
                 <div className="form-field">
                   <label>Attorney (optional)</label>
                   <PersonPicker

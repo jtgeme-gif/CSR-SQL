@@ -29,11 +29,42 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
   const [form, setForm] = useState(isCreate ? BLANK_FORM : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(!isCreate);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    if (!isCreate) load();
+    if (!isCreate) { load(); loadHistory(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personId]);
+
+  async function loadHistory() {
+    setHistoryLoading(true);
+    const { data: rows } = await supabase
+      .from('case_people')
+      .select('id, role, capacity, pro_se, matter_id, matters(id, case_name, created_at)')
+      .eq('person_id', personId);
+
+    const partyIds = (rows || []).map((r) => r.id);
+    let repMap = {};
+    if (partyIds.length > 0) {
+      const { data: reps } = await supabase
+        .from('case_people')
+        .select('represents_case_person_id, people(first_name, last_name)')
+        .in('represents_case_person_id', partyIds);
+      (reps || []).forEach((r) => {
+        const name = `${r.people?.first_name || ''} ${r.people?.last_name || ''}`.trim();
+        if (!repMap[r.represents_case_person_id]) repMap[r.represents_case_person_id] = [];
+        repMap[r.represents_case_person_id].push(name);
+      });
+    }
+
+    const enriched = (rows || [])
+      .map((r) => ({ ...r, repNames: repMap[r.id] || [] }))
+      .sort((a, b) => new Date(b.matters?.created_at || 0) - new Date(a.matters?.created_at || 0));
+    setHistoryRows(enriched);
+    setHistoryLoading(false);
+  }
 
   async function load() {
     setLoading(true);
@@ -130,11 +161,16 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
     onClose();
   }
 
+  const everPlaintiff = historyRows.some((r) => r.role === 'Plaintiff');
+  const mostRecent = historyRows[0];
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{isCreate ? 'New Person' : loading ? 'Loading…' : `${person?.first_name || ''} ${person?.last_name || ''}`}</h2>
+          <h2 style={{ color: !isCreate && everPlaintiff ? 'var(--red)' : undefined }}>
+            {isCreate ? 'New Person' : loading ? 'Loading…' : `${person?.first_name || ''} ${person?.last_name || ''}`}
+          </h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -143,6 +179,14 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
 
         {!loading && !isCreate && person && !editing && (
           <div className="modal-body">
+            {!historyLoading && mostRecent && (
+              <div className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
+                {mostRecent.repNames.length > 0
+                  ? `Represented by ${mostRecent.repNames.join(', ')}`
+                  : mostRecent.pro_se ? 'Pro Se' : 'No attorney on file'}
+                {' — '}{mostRecent.matters?.case_name || 'Unknown Matter'} ({mostRecent.role})
+              </div>
+            )}
             <div className="detail-grid">
               <div className="detail-card"><span className="detail-label">Identity</span><span className="detail-value">{person.identity}</span></div>
               <div className="detail-card"><span className="detail-label">Title</span><span className="detail-value">{person.title || '—'}</span></div>
@@ -170,6 +214,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
             </div>
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={() => setEditing(true)}>Edit</button>
+              <button className="btn" onClick={() => setShowHistory(true)}>History</button>
               <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
             </div>
           </div>
@@ -253,6 +298,32 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
           </div>
         )}
       </div>
+
+      {showHistory && (
+        <div className="modal-overlay" onClick={() => setShowHistory(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h2>History — {person?.first_name} {person?.last_name}</h2>
+              <button className="modal-close" onClick={() => setShowHistory(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {historyLoading && <p className="muted">Loading…</p>}
+              {!historyLoading && historyRows.length === 0 && <p className="muted">No matter history yet.</p>}
+              {!historyLoading && historyRows.map((r) => (
+                <div key={r.id} className="party-row">
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600 }}>{r.matters?.case_name || 'Unknown Matter'}</div>
+                    <div className="muted" style={{ fontSize: '12px' }}>
+                      {r.role}{r.capacity ? ` ${r.capacity}` : ''}{r.pro_se ? ' — Pro Se' : ''}
+                      {r.repNames.length > 0 ? ` — Represented by ${r.repNames.join(', ')}` : ''}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
