@@ -36,7 +36,8 @@ export default function MatterDetailPage() {
 
   // Court & Jurisdiction
   const [editingCourt, setEditingCourt] = useState(false);
-  const [courtCaseNumberDraft, setCourtCaseNumberDraft] = useState('');
+  const [courtForm, setCourtForm] = useState(null);
+  const [savingCourt, setSavingCourt] = useState(false);
   const [newJudge, setNewJudge] = useState({ person_id: null, person_name: '' });
   const [newMagJudge, setNewMagJudge] = useState({ person_id: null, person_name: '' });
   const [newMediator, setNewMediator] = useState({ person_id: null, person_name: '' });
@@ -61,7 +62,7 @@ export default function MatterDetailPage() {
     if (mErr) { setError(mErr.message); setLoading(false); return; }
     setMatter(m);
     setIdForm(m);
-    setCourtCaseNumberDraft(m.court_case_number || '');
+    setCourtForm(m);
 
     const { data: staffData } = await supabase.from('matter_staff').select('*').eq('matter_id', matterId).order('created_at');
     setStaff(staffData || []);
@@ -138,8 +139,21 @@ export default function MatterDetailPage() {
   async function removeClaimRep(id) { await supabase.from('matter_claim_reps').delete().eq('id', id); load(); }
 
   // ---------- Court & Jurisdiction ----------
-  async function saveCourtCaseNumber() {
-    await supabase.from('matters').update({ court_case_number: courtCaseNumberDraft.trim() || null }).eq('id', matterId);
+  function updateCourt(field, value) { setCourtForm((f) => ({ ...f, [field]: value })); }
+
+  async function saveCourtJurisdiction() {
+    setSavingCourt(true);
+    const payload = {
+      court_case_number: courtForm.court_case_number?.trim() || null,
+      court_level: courtForm.court_level?.trim() || null,
+      court_jurisdiction: courtForm.court_jurisdiction?.trim() || null,
+      circuit_county_division: courtForm.circuit_county_division?.trim() || null,
+      date_filed: courtForm.date_filed || null,
+      date_client_served: courtForm.date_client_served || null,
+    };
+    const { error } = await supabase.from('matters').update(payload).eq('id', matterId);
+    setSavingCourt(false);
+    if (error) { alert(error.message); return; }
     setEditingCourt(false);
     load();
   }
@@ -450,18 +464,50 @@ export default function MatterDetailPage() {
         </div>
 
         {!editingCourt && (
-          <div className="detail-card" style={{ maxWidth: '320px', marginBottom: '14px' }}>
-            <span className="detail-label">Court Case Number</span>
-            <span className="detail-value">{matter.court_case_number || '—'}</span>
+          <div className="detail-grid" style={{ marginBottom: '14px' }}>
+            <div className="detail-card"><span className="detail-label">Court Level</span><span className="detail-value">{matter.court_level || '—'}</span></div>
+            <div className="detail-card"><span className="detail-label">Court Jurisdiction</span><span className="detail-value">{matter.court_jurisdiction || '—'}</span></div>
+            <div className="detail-card"><span className="detail-label">Circuit/County/Division</span><span className="detail-value">{matter.circuit_county_division || '—'}</span></div>
+            <div className="detail-card"><span className="detail-label">Case Number</span><span className="detail-value">{matter.court_case_number || '—'}</span></div>
+            <div className="detail-card"><span className="detail-label">Date Filed</span><span className="detail-value">{matter.date_filed ? new Date(matter.date_filed).toLocaleDateString() : '—'}</span></div>
+            <div className="detail-card"><span className="detail-label">Date Client Served</span><span className="detail-value">{matter.date_client_served ? new Date(matter.date_client_served).toLocaleDateString() : '—'}</span></div>
           </div>
         )}
-        {editingCourt && (
-          <div className="form-field" style={{ maxWidth: '320px' }}>
-            <label>Court Case Number</label>
-            <input value={courtCaseNumberDraft} onChange={(e) => setCourtCaseNumberDraft(e.target.value)} />
+        {editingCourt && courtForm && (
+          <div style={{ marginBottom: '14px' }}>
+            <div className="form-row">
+              <div className="form-field">
+                <label>Court Level</label>
+                <input value={courtForm.court_level || ''} onChange={(e) => updateCourt('court_level', e.target.value)} placeholder="e.g. Circuit Court, Federal District" />
+              </div>
+              <div className="form-field">
+                <label>Court Jurisdiction</label>
+                <input value={courtForm.court_jurisdiction || ''} onChange={(e) => updateCourt('court_jurisdiction', e.target.value)} placeholder="e.g. Wayne County, Eastern District of Michigan" />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label>Circuit/County/Division</label>
+                <input value={courtForm.circuit_county_division || ''} onChange={(e) => updateCourt('circuit_county_division', e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label>Case Number</label>
+                <input value={courtForm.court_case_number || ''} onChange={(e) => updateCourt('court_case_number', e.target.value)} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label>Date Filed</label>
+                <input type="date" value={courtForm.date_filed || ''} onChange={(e) => updateCourt('date_filed', e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label>Date Client Served</label>
+                <input type="date" value={courtForm.date_client_served || ''} onChange={(e) => updateCourt('date_client_served', e.target.value)} />
+              </div>
+            </div>
             <div className="modal-actions">
-              <button className="btn btn-primary" onClick={saveCourtCaseNumber}>Save</button>
-              <button className="btn" onClick={() => { setEditingCourt(false); setCourtCaseNumberDraft(matter.court_case_number || ''); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveCourtJurisdiction} disabled={savingCourt}>{savingCourt ? 'Saving…' : 'Save'}</button>
+              <button className="btn" onClick={() => { setEditingCourt(false); setCourtForm(matter); }}>Cancel</button>
             </div>
           </div>
         )}
