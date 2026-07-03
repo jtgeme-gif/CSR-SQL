@@ -25,6 +25,7 @@ export default function MatterDetailPage() {
   const [caseEntities, setCaseEntities] = useState([]);
   const [casePeople, setCasePeople] = useState([]);
   const [claimReps, setClaimReps] = useState([]);
+  const [keyDeadlines, setKeyDeadlines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -81,6 +82,9 @@ export default function MatterDetailPage() {
 
     const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1, entities(name))').eq('matter_id', matterId).order('created_at');
     setClaimReps(crData || []);
+
+    const { data: kdData } = await supabase.from('events').select('*, event_types(label)').eq('matter_id', matterId).eq('is_key_deadline', true).order('event_date');
+    setKeyDeadlines(kdData || []);
 
     setLoading(false);
   }
@@ -587,6 +591,29 @@ export default function MatterDetailPage() {
               <button className="btn btn-primary" onClick={saveIdentification} disabled={savingId}>{savingId ? 'Saving…' : 'Save'}</button>
               <button className="btn" onClick={() => { setEditingId(false); setIdForm(matter); }}>Cancel</button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* KEY DEADLINES */}
+      <div className="section-card">
+        <div className="section-card-header">
+          <h3>Key Deadlines</h3>
+        </div>
+        {keyDeadlines.length === 0 && (
+          <p className="muted">No key deadlines tagged yet. Deadlines get flagged here from the Events/Scheduling tab.</p>
+        )}
+        {keyDeadlines.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {keyDeadlines.map((ev) => (
+              <div key={ev.id} className="party-row">
+                <span className="badge badge-red">
+                  {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
+                </span>
+                <span style={{ fontWeight: 600 }}>{ev.event_types?.label || 'Deadline'}</span>
+                {ev.description && <span className="muted">{ev.description}</span>}
+              </div>
+            ))}
           </div>
         )}
       </div>
