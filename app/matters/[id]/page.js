@@ -30,7 +30,6 @@ export default function MatterDetailPage() {
   const [editingId, setEditingId] = useState(false);
   const [idForm, setIdForm] = useState(null);
   const [savingId, setSavingId] = useState(false);
-  const [clientInsurerName, setClientInsurerName] = useState('');
 
   const [newStaffName, setNewStaffName] = useState('');
   const [newClaimRep, setNewClaimRep] = useState({ person_id: null, person_name: '', claim_number: '', label: '' });
@@ -64,13 +63,6 @@ export default function MatterDetailPage() {
     setIdForm(m);
     setCourtCaseNumberDraft(m.court_case_number || '');
 
-    if (m.client_insurer_entity_id) {
-      const { data: ins } = await supabase.from('entities').select('name').eq('id', m.client_insurer_entity_id).single();
-      setClientInsurerName(ins?.name || '');
-    } else {
-      setClientInsurerName('');
-    }
-
     const { data: staffData } = await supabase.from('matter_staff').select('*').eq('matter_id', matterId).order('created_at');
     setStaff(staffData || []);
 
@@ -80,7 +72,7 @@ export default function MatterDetailPage() {
     const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1)').eq('matter_id', matterId);
     setCasePeople(cpData || []);
 
-    const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1)').eq('matter_id', matterId).order('created_at');
+    const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1, entities(name))').eq('matter_id', matterId).order('created_at');
     setClaimReps(crData || []);
 
     setLoading(false);
@@ -131,10 +123,6 @@ export default function MatterDetailPage() {
   async function removeStaff(id) { await supabase.from('matter_staff').delete().eq('id', id); load(); }
 
   // ---------- Client Insurer / Claim reps (behind Case Identification Edit) ----------
-  async function setClientInsurer(id, name) {
-    await supabase.from('matters').update({ client_insurer_entity_id: id }).eq('id', matterId);
-    load();
-  }
   async function addClaimRep() {
     if (!newClaimRep.person_id) { alert('Pick or create a claim rep first.'); return; }
     const { error } = await supabase.from('matter_claim_reps').insert({
@@ -361,16 +349,15 @@ export default function MatterDetailPage() {
               <div className="detail-card"><span className="detail-label">Case Name</span><span className="detail-value">{matter.case_name}</span></div>
               <div className="detail-card"><span className="detail-label">File Number</span><span className="detail-value">{matter.file_number || '—'}</span></div>
               <div className="detail-card">
-                <span className="detail-label">Claim Rep(s)</span>
+                <span className="detail-label">Client Rep(s)</span>
                 <span className="detail-value">
                   {claimReps.length === 0 ? '—' : claimReps.map((cr) => (
                     <a key={cr.id} className="row-link" style={{ display: 'block' }} href={cr.people?.email1 ? `mailto:${cr.people.email1}` : undefined}>
-                      {cr.people?.first_name} {cr.people?.last_name}{cr.label ? ` — ${cr.label}` : ''}{cr.claim_number ? ` — Claim# ${cr.claim_number}` : ''}
+                      {cr.people?.entities?.name ? `${cr.people.entities.name} — ` : ''}{cr.people?.first_name} {cr.people?.last_name}{cr.label ? ` — ${cr.label}` : ''}{cr.claim_number ? ` — Claim# ${cr.claim_number}` : ''}
                     </a>
                   ))}
                 </span>
               </div>
-              <div className="detail-card"><span className="detail-label">Client File Number</span><span className="detail-value">{caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ') || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Date Opened</span><span className="detail-value">{matter.date_opened ? new Date(matter.date_opened).toLocaleDateString() : '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Practice Group</span><span className="detail-value">{matter.practice_group || '—'}</span></div>
               <div className="detail-card">
@@ -426,15 +413,11 @@ export default function MatterDetailPage() {
             </div>
 
             <div className="form-field">
-              <label>Client Insurer</label>
-              <EntityPicker value={idForm.client_insurer_entity_id} valueName={clientInsurerName} onChange={setClientInsurer} />
-            </div>
-            <div className="form-field">
-              <label>Claim Rep(s)</label>
+              <label>Client Rep(s)</label>
               {claimReps.length === 0 && <p className="muted" style={{ margin: '4px 0' }}>None yet.</p>}
               {claimReps.map((cr) => (
                 <div key={cr.id} className="party-row">
-                  <span>{cr.people?.first_name} {cr.people?.last_name}</span>
+                  <span>{cr.people?.entities?.name ? `${cr.people.entities.name} — ` : ''}{cr.people?.first_name} {cr.people?.last_name}</span>
                   {cr.label && <span className="muted">{cr.label}</span>}
                   {cr.claim_number && <span className="muted">Claim# {cr.claim_number}</span>}
                   <button className="btn-small btn-small-danger" onClick={() => removeClaimRep(cr.id)}>Remove</button>
