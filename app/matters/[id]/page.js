@@ -26,22 +26,24 @@ export default function MatterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [editingCore, setEditingCore] = useState(false);
-  const [coreForm, setCoreForm] = useState(null);
-  const [savingCore, setSavingCore] = useState(false);
+  // Case Identification — single Edit gate for everything except Case Status
+  const [editingId, setEditingId] = useState(false);
+  const [idForm, setIdForm] = useState(null);
+  const [savingId, setSavingId] = useState(false);
   const [clientInsurerName, setClientInsurerName] = useState('');
 
   const [newStaffName, setNewStaffName] = useState('');
   const [newClaimRep, setNewClaimRep] = useState({ person_id: null, person_name: '', claim_number: '', label: '' });
 
+  // Court & Jurisdiction
+  const [editingCourt, setEditingCourt] = useState(false);
+  const [courtCaseNumberDraft, setCourtCaseNumberDraft] = useState('');
   const [newJudge, setNewJudge] = useState({ person_id: null, person_name: '' });
   const [newMagJudge, setNewMagJudge] = useState({ person_id: null, person_name: '' });
   const [newMediator, setNewMediator] = useState({ person_id: null, person_name: '' });
 
-  // per-role add-party forms
   const [addEntityForm, setAddEntityForm] = useState({});
   const [addPersonForm, setAddPersonForm] = useState({});
-  // per-party nested add forms (keyed by "entity-<id>" or "person-<id>")
   const [nestedAddForm, setNestedAddForm] = useState({});
 
   const [modalPersonId, setModalPersonId] = useState(null);
@@ -59,7 +61,8 @@ export default function MatterDetailPage() {
     const { data: m, error: mErr } = await supabase.from('matters').select('*').eq('id', matterId).single();
     if (mErr) { setError(mErr.message); setLoading(false); return; }
     setMatter(m);
-    setCoreForm(m);
+    setIdForm(m);
+    setCourtCaseNumberDraft(m.court_case_number || '');
 
     if (m.client_insurer_entity_id) {
       const { data: ins } = await supabase.from('entities').select('name').eq('id', m.client_insurer_entity_id).single();
@@ -83,25 +86,34 @@ export default function MatterDetailPage() {
     setLoading(false);
   }
 
-  // ---------- Core info ----------
-  function updateCore(field, value) { setCoreForm((f) => ({ ...f, [field]: value })); }
+  // ---------- Case Identification ----------
+  function updateId(field, value) { setIdForm((f) => ({ ...f, [field]: value })); }
 
-  async function saveCore() {
-    setSavingCore(true);
+  async function saveIdentification() {
+    setSavingId(true);
     const payload = {
-      practice_group: coreForm.practice_group || null,
-      case_status: coreForm.case_status || null,
-      appellate_case_number: coreForm.case_status === 'Appeal' ? (coreForm.appellate_case_number || null) : null,
-      date_opened: coreForm.date_opened || null,
-      court_case_number: coreForm.court_case_number || null,
-      client_insurer_entity_id: coreForm.client_insurer_entity_id || null,
-      file_number: coreForm.file_number || null,
+      case_name: idForm.case_name?.trim() || matter.case_name,
+      file_number: idForm.file_number?.trim() || null,
+      practice_group: idForm.practice_group || null,
+      date_opened: idForm.date_opened || null,
     };
     const { error } = await supabase.from('matters').update(payload).eq('id', matterId);
-    setSavingCore(false);
+    setSavingId(false);
     if (error) { alert(error.message); return; }
-    setEditingCore(false);
+    setEditingId(false);
     load();
+  }
+
+  // Case Status lives outside the Edit gate — changes save immediately.
+  async function updateCaseStatusLive(newStatus) {
+    const payload = { case_status: newStatus || null };
+    if (newStatus !== 'Appeal') payload.appellate_case_number = null;
+    const { error } = await supabase.from('matters').update(payload).eq('id', matterId);
+    if (error) { alert(error.message); return; }
+    load();
+  }
+  async function updateAppellateNumber(value) {
+    await supabase.from('matters').update({ appellate_case_number: value || null }).eq('id', matterId);
   }
 
   async function toggleStar() {
@@ -109,7 +121,7 @@ export default function MatterDetailPage() {
     if (!error) load();
   }
 
-  // ---------- Assigned staff ----------
+  // ---------- Assigned staff (behind Case Identification Edit) ----------
   async function addStaff() {
     if (!newStaffName.trim()) return;
     await supabase.from('matter_staff').insert({ matter_id: matterId, staff_name: newStaffName.trim() });
@@ -118,7 +130,11 @@ export default function MatterDetailPage() {
   }
   async function removeStaff(id) { await supabase.from('matter_staff').delete().eq('id', id); load(); }
 
-  // ---------- Claim reps ----------
+  // ---------- Client Insurer / Claim reps (behind Case Identification Edit) ----------
+  async function setClientInsurer(id, name) {
+    await supabase.from('matters').update({ client_insurer_entity_id: id }).eq('id', matterId);
+    load();
+  }
   async function addClaimRep() {
     if (!newClaimRep.person_id) { alert('Pick or create a claim rep first.'); return; }
     const { error } = await supabase.from('matter_claim_reps').insert({
@@ -134,6 +150,11 @@ export default function MatterDetailPage() {
   async function removeClaimRep(id) { await supabase.from('matter_claim_reps').delete().eq('id', id); load(); }
 
   // ---------- Court & Jurisdiction ----------
+  async function saveCourtCaseNumber() {
+    await supabase.from('matters').update({ court_case_number: courtCaseNumberDraft.trim() || null }).eq('id', matterId);
+    setEditingCourt(false);
+    load();
+  }
   async function addCourtRole(role, picked, resetFn) {
     if (!picked.person_id) { alert('Pick or create a person first.'); return; }
     const { error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: picked.person_id, role });
@@ -166,7 +187,6 @@ export default function MatterDetailPage() {
   async function removeEntityParty(id) { await supabase.from('case_entities').delete().eq('id', id); load(); }
   async function removePersonParty(id) { await supabase.from('case_people').delete().eq('id', id); load(); }
 
-  // Nested POC (defendant entities) / Attorney (plaintiff & co-defendant parties)
   function nestedKey(kind, id) { return `${kind}-${id}`; }
   function nestedFormFor(key) { return nestedAddForm[key] || { person_id: null, person_name: '' }; }
   function updateNestedForm(key, val) { setNestedAddForm((s) => ({ ...s, [key]: val })); }
@@ -204,14 +224,8 @@ export default function MatterDetailPage() {
   const magJudgeRows = casePeople.filter((cp) => cp.role === 'Magistrate Judge');
   const mediatorRows = casePeople.filter((cp) => cp.role === 'Mediator');
 
-  // "Our File" is now a simple matter-level field (typed manually,
-  // including multi-defendant strings like "1979.1807 // 1979.1810").
-  const clientFileNumbers = caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ');
-
   function partiesForRole(role) {
-    const entities = caseEntities.filter((ce) => ce.role === role);
-    const people = casePeople.filter((cp) => cp.role === role);
-    return { entities, people };
+    return { entities: caseEntities.filter((ce) => ce.role === role), people: casePeople.filter((cp) => cp.role === role) };
   }
 
   function renderPartyGroup(role) {
@@ -222,7 +236,6 @@ export default function MatterDetailPage() {
     return (
       <div className="party-group" key={role}>
         <div className="party-group-title">{role}s</div>
-
         {entities.length === 0 && people.length === 0 && <p className="muted" style={{ margin: '4px 0 10px' }}>None yet.</p>}
 
         {entities.map((ce) => {
@@ -245,10 +258,7 @@ export default function MatterDetailPage() {
                 <div className="nested-block">
                   <span className="nested-label">POC(s):</span>
                   {pocs.map((p) => (
-                    <span key={p.id} className="chip chip-removable">
-                      {p.people?.first_name} {p.people?.last_name}
-                      <button onClick={() => removeCasePerson(p.id)}>×</button>
-                    </span>
+                    <span key={p.id} className="chip chip-removable">{p.people?.first_name} {p.people?.last_name}<button onClick={() => removeCasePerson(p.id)}>×</button></span>
                   ))}
                   <div className="nested-add-row">
                     <PersonPicker value={pocForm.person_id} valueName={pocForm.person_name} onChange={(id, name) => updateNestedForm(pocKey, { person_id: id, person_name: name })} />
@@ -261,10 +271,7 @@ export default function MatterDetailPage() {
                 <div className="nested-block">
                   <span className="nested-label">Attorney(s):</span>
                   {attys.map((a) => (
-                    <span key={a.id} className="chip chip-removable">
-                      {a.people?.first_name} {a.people?.last_name}
-                      <button onClick={() => removeCasePerson(a.id)}>×</button>
-                    </span>
+                    <span key={a.id} className="chip chip-removable">{a.people?.first_name} {a.people?.last_name}<button onClick={() => removeCasePerson(a.id)}>×</button></span>
                   ))}
                   <div className="nested-add-row">
                     <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
@@ -293,10 +300,7 @@ export default function MatterDetailPage() {
                 <div className="nested-block">
                   <span className="nested-label">Attorney(s):</span>
                   {attys.map((a) => (
-                    <span key={a.id} className="chip chip-removable">
-                      {a.people?.first_name} {a.people?.last_name}
-                      <button onClick={() => removeCasePerson(a.id)}>×</button>
-                    </span>
+                    <span key={a.id} className="chip chip-removable">{a.people?.first_name} {a.people?.last_name}<button onClick={() => removeCasePerson(a.id)}>×</button></span>
                   ))}
                   <div className="nested-add-row">
                     <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
@@ -331,7 +335,7 @@ export default function MatterDetailPage() {
       {/* INFO BAR */}
       <div className="info-bar">
         <span><strong>Our File:</strong> {matter.file_number || '—'}</span>
-        <span><strong>Client File:</strong> {clientFileNumbers || '—'}</span>
+        <span><strong>Client File:</strong> {caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ') || '—'}</span>
         <span className="info-bar-link">📁 File Folder</span>
         <span className="info-bar-link">📓 OneNote</span>
         <span><strong>Answer Due:</strong> —</span>
@@ -344,111 +348,137 @@ export default function MatterDetailPage() {
         ))}
       </div>
 
-      {/* CASE OVERVIEW */}
+      {/* CASE IDENTIFICATION */}
       <div className="section-card">
         <div className="section-card-header">
-          <h3>Case Overview</h3>
-          {!editingCore && <button className="btn-small" onClick={() => setEditingCore(true)}>Edit</button>}
+          <h3>Case Identification</h3>
+          {!editingId && <button className="btn-small" onClick={() => setEditingId(true)}>Edit</button>}
         </div>
 
-        {!editingCore && (
+        {!editingId && (
           <>
             <div className="detail-grid">
-              <div className="detail-card"><span className="detail-label">Practice Group</span><span className="detail-value">{matter.practice_group || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Case Status</span><span className="detail-value">{matter.case_status || '—'}</span></div>
-              {matter.case_status === 'Appeal' && (
-                <div className="detail-card"><span className="detail-label">Appellate Case Number</span><span className="detail-value">{matter.appellate_case_number || '—'}</span></div>
-              )}
+              <div className="detail-card"><span className="detail-label">Case Name</span><span className="detail-value">{matter.case_name}</span></div>
+              <div className="detail-card"><span className="detail-label">File Number</span><span className="detail-value">{matter.file_number || '—'}</span></div>
+              <div className="detail-card">
+                <span className="detail-label">Claim Rep(s)</span>
+                <span className="detail-value">
+                  {claimReps.length === 0 ? '—' : claimReps.map((cr) => (
+                    <a key={cr.id} className="row-link" style={{ display: 'block' }} href={cr.people?.email1 ? `mailto:${cr.people.email1}` : undefined}>
+                      {cr.people?.first_name} {cr.people?.last_name}{cr.label ? ` — ${cr.label}` : ''}{cr.claim_number ? ` — Claim# ${cr.claim_number}` : ''}
+                    </a>
+                  ))}
+                </span>
+              </div>
+              <div className="detail-card"><span className="detail-label">Client File Number</span><span className="detail-value">{caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ') || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Date Opened</span><span className="detail-value">{matter.date_opened ? new Date(matter.date_opened).toLocaleDateString() : '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Court Case Number</span><span className="detail-value">{matter.court_case_number || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">Practice Group</span><span className="detail-value">{matter.practice_group || '—'}</span></div>
+              <div className="detail-card">
+                <span className="detail-label">Assigned Staff</span>
+                <span className="detail-value">{staff.length === 0 ? '—' : staff.map((s) => s.staff_name).join(', ')}</span>
+              </div>
             </div>
-            <div className="chip-row" style={{ marginTop: '12px' }}>
-              <span className="detail-label" style={{ marginRight: '8px' }}>ASSIGNED STAFF</span>
-              {staff.length === 0 && <span className="muted">Nobody assigned yet.</span>}
-              {staff.map((s) => (
-                <span key={s.id} className="chip chip-removable">{s.staff_name}<button onClick={() => removeStaff(s.id)}>×</button></span>
-              ))}
+
+            {/* Case Status — the one field editable without hitting Edit */}
+            <div className="form-field" style={{ maxWidth: '280px', marginTop: '14px' }}>
+              <label>Case Status</label>
+              <select value={matter.case_status || ''} onChange={(e) => updateCaseStatusLive(e.target.value)}>
+                <option value="">Select…</option>
+                {CASE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
-            <div className="inline-add-row">
-              <input type="text" placeholder="Staff name" value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} />
-              <button className="btn-small" onClick={addStaff}>+ Add</button>
-            </div>
+            {matter.case_status === 'Appeal' && (
+              <div className="form-field" style={{ maxWidth: '280px' }}>
+                <label>Appellate Case Number</label>
+                <input defaultValue={matter.appellate_case_number || ''} onBlur={(e) => updateAppellateNumber(e.target.value)} />
+              </div>
+            )}
           </>
         )}
 
-        {editingCore && coreForm && (
+        {editingId && idForm && (
           <div>
             <div className="form-row">
+              <div className="form-field"><label>Case Name</label><input value={idForm.case_name || ''} onChange={(e) => updateId('case_name', e.target.value)} /></div>
+              <div className="form-field"><label>File Number</label><input value={idForm.file_number || ''} onChange={(e) => updateId('file_number', e.target.value)} placeholder="e.g. 1979.1807 // 1979.1810" /></div>
+            </div>
+            <div className="form-row">
+              <div className="form-field"><label>Date Opened</label><input type="date" value={idForm.date_opened || ''} onChange={(e) => updateId('date_opened', e.target.value)} /></div>
               <div className="form-field">
                 <label>Practice Group</label>
-                <select value={coreForm.practice_group || ''} onChange={(e) => updateCore('practice_group', e.target.value)}>
+                <select value={idForm.practice_group || ''} onChange={(e) => updateId('practice_group', e.target.value)}>
                   <option value="">Select…</option>
                   {PRACTICE_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
-              <div className="form-field">
-                <label>Case Status</label>
-                <select value={coreForm.case_status || ''} onChange={(e) => updateCore('case_status', e.target.value)}>
-                  <option value="">Select…</option>
-                  {CASE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+            </div>
+
+            <div className="form-field">
+              <label>Assigned Staff</label>
+              <div className="chip-row">
+                {staff.length === 0 && <span className="muted">Nobody assigned yet.</span>}
+                {staff.map((s) => <span key={s.id} className="chip chip-removable">{s.staff_name}<button onClick={() => removeStaff(s.id)}>×</button></span>)}
+              </div>
+              <div className="inline-add-row">
+                <input type="text" placeholder="Staff name" value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} />
+                <button className="btn-small" onClick={addStaff}>+ Add</button>
               </div>
             </div>
-            {coreForm.case_status === 'Appeal' && (
-              <div className="form-field"><label>Appellate Case Number</label><input value={coreForm.appellate_case_number || ''} onChange={(e) => updateCore('appellate_case_number', e.target.value)} /></div>
-            )}
-            <div className="form-field"><label>File Number</label><input value={coreForm.file_number || ''} onChange={(e) => updateCore('file_number', e.target.value)} placeholder="e.g. 1979.1807 // 1979.1810" /></div>
-            <div className="form-row">
-              <div className="form-field"><label>Date Opened</label><input type="date" value={coreForm.date_opened || ''} onChange={(e) => updateCore('date_opened', e.target.value)} /></div>
-              <div className="form-field"><label>Court Case Number</label><input value={coreForm.court_case_number || ''} onChange={(e) => updateCore('court_case_number', e.target.value)} /></div>
+
+            <div className="form-field">
+              <label>Client Insurer</label>
+              <EntityPicker value={idForm.client_insurer_entity_id} valueName={clientInsurerName} onChange={setClientInsurer} />
             </div>
+            <div className="form-field">
+              <label>Claim Rep(s)</label>
+              {claimReps.length === 0 && <p className="muted" style={{ margin: '4px 0' }}>None yet.</p>}
+              {claimReps.map((cr) => (
+                <div key={cr.id} className="party-row">
+                  <span>{cr.people?.first_name} {cr.people?.last_name}</span>
+                  {cr.label && <span className="muted">{cr.label}</span>}
+                  {cr.claim_number && <span className="muted">Claim# {cr.claim_number}</span>}
+                  <button className="btn-small btn-small-danger" onClick={() => removeClaimRep(cr.id)}>Remove</button>
+                </div>
+              ))}
+              <div className="add-party-form">
+                <PersonPicker value={newClaimRep.person_id} valueName={newClaimRep.person_name} onChange={(id, name) => setNewClaimRep((f) => ({ ...f, person_id: id, person_name: name }))} />
+                <input type="text" placeholder="Claim #" value={newClaimRep.claim_number} onChange={(e) => setNewClaimRep((f) => ({ ...f, claim_number: e.target.value }))} />
+                <input type="text" placeholder="Label (e.g. Hancock)" value={newClaimRep.label} onChange={(e) => setNewClaimRep((f) => ({ ...f, label: e.target.value }))} />
+                <button className="btn-small" onClick={addClaimRep}>+ Add Claim Rep</button>
+              </div>
+            </div>
+
             <div className="modal-actions">
-              <button className="btn btn-primary" onClick={saveCore} disabled={savingCore}>{savingCore ? 'Saving…' : 'Save'}</button>
-              <button className="btn" onClick={() => { setEditingCore(false); setCoreForm(matter); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveIdentification} disabled={savingId}>{savingId ? 'Saving…' : 'Save'}</button>
+              <button className="btn" onClick={() => { setEditingId(false); setIdForm(matter); }}>Cancel</button>
             </div>
           </div>
         )}
       </div>
 
-      {/* CLIENT INSURER */}
-      <div className="section-card">
-        <div className="section-card-header"><h3>Client Insurer</h3></div>
-        <div className="form-field" style={{ maxWidth: '360px' }}>
-          <EntityPicker
-            value={matter.client_insurer_entity_id}
-            valueName={clientInsurerName}
-            onChange={async (id, name) => {
-              await supabase.from('matters').update({ client_insurer_entity_id: id }).eq('id', matterId);
-              load();
-            }}
-          />
-        </div>
-
-        <div style={{ marginTop: '12px' }}>
-          {claimReps.length === 0 && <p className="muted">No claim reps added yet.</p>}
-          {claimReps.map((cr) => (
-            <div key={cr.id} className="party-row">
-              <a className="row-link" href={cr.people?.email1 ? `mailto:${cr.people.email1}` : undefined}>
-                {cr.people?.first_name} {cr.people?.last_name}
-              </a>
-              {cr.label && <span className="muted">{cr.label}</span>}
-              {cr.claim_number && <span className="muted">Claim# {cr.claim_number}</span>}
-              <button className="btn-small btn-small-danger" onClick={() => removeClaimRep(cr.id)}>Remove</button>
-            </div>
-          ))}
-        </div>
-
-        <div className="add-party-form">
-          <PersonPicker value={newClaimRep.person_id} valueName={newClaimRep.person_name} onChange={(id, name) => setNewClaimRep((f) => ({ ...f, person_id: id, person_name: name }))} />
-          <input type="text" placeholder="Claim #" value={newClaimRep.claim_number} onChange={(e) => setNewClaimRep((f) => ({ ...f, claim_number: e.target.value }))} />
-          <input type="text" placeholder="Label (e.g. Hancock)" value={newClaimRep.label} onChange={(e) => setNewClaimRep((f) => ({ ...f, label: e.target.value }))} />
-          <button className="btn-small" onClick={addClaimRep}>+ Add Claim Rep</button>
-        </div>
-      </div>
-
       {/* COURT & JURISDICTION */}
       <div className="section-card">
-        <div className="section-card-header"><h3>Court & Jurisdiction</h3></div>
+        <div className="section-card-header">
+          <h3>Court & Jurisdiction</h3>
+          {!editingCourt && <button className="btn-small" onClick={() => setEditingCourt(true)}>Edit</button>}
+        </div>
+
+        {!editingCourt && (
+          <div className="detail-card" style={{ maxWidth: '320px', marginBottom: '14px' }}>
+            <span className="detail-label">Court Case Number</span>
+            <span className="detail-value">{matter.court_case_number || '—'}</span>
+          </div>
+        )}
+        {editingCourt && (
+          <div className="form-field" style={{ maxWidth: '320px' }}>
+            <label>Court Case Number</label>
+            <input value={courtCaseNumberDraft} onChange={(e) => setCourtCaseNumberDraft(e.target.value)} />
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={saveCourtCaseNumber}>Save</button>
+              <button className="btn" onClick={() => { setEditingCourt(false); setCourtCaseNumberDraft(matter.court_case_number || ''); }}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {[
           { label: 'Judge', role: 'Judge', rows: judgeRows, form: newJudge, setForm: setNewJudge },
@@ -459,10 +489,7 @@ export default function MatterDetailPage() {
             <span className="nested-label">{label}:</span>
             {rows.length === 0 && <span className="muted">None yet.</span>}
             {rows.map((r) => (
-              <span key={r.id} className="chip chip-removable">
-                {r.people?.first_name} {r.people?.last_name}
-                <button onClick={() => removeCasePerson(r.id)}>×</button>
-              </span>
+              <span key={r.id} className="chip chip-removable">{r.people?.first_name} {r.people?.last_name}<button onClick={() => removeCasePerson(r.id)}>×</button></span>
             ))}
             <div className="nested-add-row">
               <PersonPicker value={form.person_id} valueName={form.person_name} onChange={(id, name) => setForm({ person_id: id, person_name: name })} />
