@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import PersonModal from './PersonModal';
 
@@ -11,6 +10,7 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [modalPersonId, setModalPersonId] = useState(null);
+  const [creatingPerson, setCreatingPerson] = useState(false);
   const [modalEdit, setModalEdit] = useState(false);
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
             onChange={(e) => setSearch(e.target.value)}
             style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px' }}
           />
-          <Link href="/people/new" className="btn btn-primary">+ Add Person</Link>
+          <button className="btn btn-primary" onClick={() => setCreatingPerson(true)}>+ Add Person</button>
         </div>
       </div>
 
@@ -74,7 +74,7 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
       {!loading && !error && filtered.length === 0 && (
         <div className="empty-state">
           <p>{people.length === 0 ? 'Nobody here yet.' : 'No matches.'}</p>
-          {people.length === 0 && <Link href="/people/new" className="btn btn-primary">Add a person</Link>}
+          {people.length === 0 && <button className="btn btn-primary" onClick={() => setCreatingPerson(true)}>Add a person</button>}
         </div>
       )}
 
@@ -117,6 +117,9 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
           onClose={() => setModalPersonId(null)}
           onChanged={load}
         />
+      )}
+      {creatingPerson && (
+        <PersonModal personId={null} onClose={() => setCreatingPerson(false)} onChanged={load} />
       )}
     </div>
   );

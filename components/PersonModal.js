@@ -6,16 +6,30 @@ import EntityPicker from './EntityPicker';
 
 const IDENTITIES = ['Individual', 'Attorney', 'Judge', 'Client Rep'];
 
+const BLANK_FORM = {
+  first_name: '', middle_name: '', last_name: '', title: '',
+  identity: 'Individual',
+  entity_id: null, entity_name: '',
+  address: '', city: '', state: '', zip: '',
+  phone1: '', phone1_label: '', phone2: '', phone2_label: '',
+  email1: '', email1_label: '', email2: '', email2_label: '',
+  website: '', mediator: false, field_of_expertise: '',
+  court_level: '', court_jurisdiction: '', magjudge: false,
+  notes: '',
+};
+
+// personId === null/undefined => Create mode (blank form, opens straight into editing)
 export default function PersonModal({ personId, startInEdit, onClose, onChanged }) {
+  const isCreate = !personId;
   const [person, setPerson] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(!!startInEdit);
-  const [form, setForm] = useState(null);
+  const [loading, setLoading] = useState(!isCreate);
+  const [editing, setEditing] = useState(isCreate || !!startInEdit);
+  const [form, setForm] = useState(isCreate ? BLANK_FORM : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    load();
+    if (!isCreate) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personId]);
 
@@ -50,10 +64,8 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
     }
   }
 
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-    const payload = {
+  function buildPayload() {
+    return {
       first_name: form.first_name?.trim() || null,
       middle_name: form.middle_name?.trim() || null,
       last_name: form.last_name?.trim() || null,
@@ -80,12 +92,29 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
       magjudge: form.identity === 'Judge' ? !!form.magjudge : false,
       notes: form.notes?.trim() || null,
     };
-    const { error } = await supabase.from('people').update(payload).eq('id', personId);
-    setSaving(false);
-    if (error) {
-      setError(error.message);
+  }
+
+  async function handleSave() {
+    if (!form.first_name?.trim() && !form.last_name?.trim()) {
+      setError('First or last name is required.');
       return;
     }
+    setSaving(true);
+    setError(null);
+    const payload = buildPayload();
+
+    if (isCreate) {
+      const { error } = await supabase.from('people').insert(payload);
+      setSaving(false);
+      if (error) { setError(error.message); return; }
+      onChanged?.();
+      onClose();
+      return;
+    }
+
+    const { error } = await supabase.from('people').update(payload).eq('id', personId);
+    setSaving(false);
+    if (error) { setError(error.message); return; }
     setEditing(false);
     await load();
     onChanged?.();
@@ -94,10 +123,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
   async function handleDelete() {
     if (!confirm(`Delete ${person.first_name} ${person.last_name}? This can't be undone.`)) return;
     const { error } = await supabase.from('people').delete().eq('id', personId);
-    if (error) {
-      setError(error.message);
-      return;
-    }
+    if (error) { setError(error.message); return; }
     onChanged?.();
     onClose();
   }
@@ -106,14 +132,14 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{loading ? 'Loading…' : `${person?.first_name || ''} ${person?.last_name || ''}`}</h2>
+          <h2>{isCreate ? 'New Person' : loading ? 'Loading…' : `${person?.first_name || ''} ${person?.last_name || ''}`}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         {loading && <p className="muted">Loading…</p>}
         {error && <div className="error-box">{error}</div>}
 
-        {!loading && person && !editing && (
+        {!loading && !isCreate && person && !editing && (
           <div className="modal-body">
             <div className="detail-grid">
               <div className="detail-card"><span className="detail-label">Identity</span><span className="detail-value">{person.identity}</span></div>
@@ -147,7 +173,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
           </div>
         )}
 
-        {!loading && person && editing && form && (
+        {(isCreate || editing) && form && (
           <div className="modal-body">
             <div className="form-row">
               <div className="form-field"><label>First Name</label><input value={form.first_name || ''} onChange={(e) => update('first_name', e.target.value)} /></div>
@@ -161,7 +187,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
                   {IDENTITIES.map((i) => <option key={i} value={i}>{i}</option>)}
                 </select>
               </div>
-              <div className="form-field"><label>Title</label><input value={form.title || ''} onChange={(e) => update('title', e.target.value)} /></div>
+              <div className="form-field"><label>Title</label><input value={form.title || ''} onChange={(e) => update('title', e.target.value)} placeholder="e.g. Chief of Police" /></div>
             </div>
             <div className="form-field">
               <label>Entity</label>
@@ -219,8 +245,8 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
 
             {error && <div className="error-box">{error}</div>}
             <div className="modal-actions">
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-              <button className="btn" onClick={() => { setEditing(false); setForm({ ...person, entity_name: person.entities?.name || '' }); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : isCreate ? 'Create Person' : 'Save'}</button>
+              <button className="btn" onClick={() => { if (isCreate) { onClose(); } else { setEditing(false); setForm({ ...person, entity_name: person.entities?.name || '' }); } }}>Cancel</button>
             </div>
           </div>
         )}

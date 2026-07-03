@@ -3,16 +3,20 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+const BLANK_FORM = { name: '', address: '', city: '', state: '', zip: '', phone: '', email: '', website: '', notes: '' };
+
+// entityId === null/undefined => Create mode (blank form, opens straight into editing)
 export default function EntityModal({ entityId, startInEdit, onClose, onChanged }) {
+  const isCreate = !entityId;
   const [entity, setEntity] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(!!startInEdit);
-  const [form, setForm] = useState(null);
+  const [loading, setLoading] = useState(!isCreate);
+  const [editing, setEditing] = useState(isCreate || !!startInEdit);
+  const [form, setForm] = useState(isCreate ? BLANK_FORM : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    load();
+    if (!isCreate) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId]);
 
@@ -32,10 +36,8 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-    const payload = {
+  function buildPayload() {
+    return {
       name: form.name?.trim(),
       address: form.address?.trim() || null,
       city: form.city?.trim() || null,
@@ -46,17 +48,29 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
       website: form.website?.trim() || null,
       notes: form.notes?.trim() || null,
     };
+  }
+
+  async function handleSave() {
+    const payload = buildPayload();
     if (!payload.name) {
       setError('Name is required.');
-      setSaving(false);
       return;
     }
+    setSaving(true);
+    setError(null);
+
+    if (isCreate) {
+      const { error } = await supabase.from('entities').insert(payload);
+      setSaving(false);
+      if (error) { setError(error.message); return; }
+      onChanged?.();
+      onClose();
+      return;
+    }
+
     const { error } = await supabase.from('entities').update(payload).eq('id', entityId);
     setSaving(false);
-    if (error) {
-      setError(error.message);
-      return;
-    }
+    if (error) { setError(error.message); return; }
     setEditing(false);
     await load();
     onChanged?.();
@@ -65,10 +79,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
   async function handleDelete() {
     if (!confirm(`Delete ${entity.name}? This can't be undone. People linked to this entity will keep their link cleared, not be deleted.`)) return;
     const { error } = await supabase.from('entities').delete().eq('id', entityId);
-    if (error) {
-      setError(error.message);
-      return;
-    }
+    if (error) { setError(error.message); return; }
     onChanged?.();
     onClose();
   }
@@ -77,14 +88,14 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{loading ? 'Loading…' : entity?.name}</h2>
+          <h2>{isCreate ? 'New Entity' : loading ? 'Loading…' : entity?.name}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         {loading && <p className="muted">Loading…</p>}
         {error && <div className="error-box">{error}</div>}
 
-        {!loading && entity && !editing && (
+        {!loading && !isCreate && entity && !editing && (
           <div className="modal-body">
             <div className="detail-grid">
               <div className="detail-card"><span className="detail-label">Address</span><span className="detail-value">{[entity.address, entity.city, entity.state, entity.zip].filter(Boolean).join(', ') || '—'}</span></div>
@@ -102,7 +113,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
           </div>
         )}
 
-        {!loading && entity && editing && form && (
+        {(isCreate || editing) && form && (
           <div className="modal-body">
             <div className="form-field"><label>Name *</label><input value={form.name || ''} onChange={(e) => update('name', e.target.value)} /></div>
             <div className="form-field"><label>Address</label><input value={form.address || ''} onChange={(e) => update('address', e.target.value)} /></div>
@@ -120,8 +131,8 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
 
             {error && <div className="error-box">{error}</div>}
             <div className="modal-actions">
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-              <button className="btn" onClick={() => { setEditing(false); setForm(entity); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : isCreate ? 'Create Entity' : 'Save'}</button>
+              <button className="btn" onClick={() => { if (isCreate) { onClose(); } else { setEditing(false); setForm(entity); } }}>Cancel</button>
             </div>
           </div>
         )}

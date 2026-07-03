@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import PersonModal from '../../components/PersonModal';
 import EntityModal from '../../components/EntityModal';
@@ -16,6 +15,8 @@ export default function DirectoryPage() {
   const [sortDir, setSortDir] = useState('asc');
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
+  const [creatingPerson, setCreatingPerson] = useState(false);
+  const [creatingEntity, setCreatingEntity] = useState(false);
 
   useEffect(() => {
     load();
@@ -121,8 +122,8 @@ export default function DirectoryPage() {
             <option value="Person">People only</option>
             <option value="Entity">Entities only</option>
           </select>
-          <Link href="/people/new" className="btn btn-primary">+ Add Person</Link>
-          <Link href="/entities/new" className="btn btn-primary">+ Add Entity</Link>
+          <button className="btn btn-primary" onClick={() => setCreatingPerson(true)}>+ Add Person</button>
+          <button className="btn btn-primary" onClick={() => setCreatingEntity(true)}>+ Add Entity</button>
         </div>
       </div>
 
@@ -169,6 +170,12 @@ export default function DirectoryPage() {
       )}
       {modalEntityId && (
         <EntityModal entityId={modalEntityId} onClose={() => setModalEntityId(null)} onChanged={load} />
+      )}
+      {creatingPerson && (
+        <PersonModal personId={null} onClose={() => setCreatingPerson(false)} onChanged={load} />
+      )}
+      {creatingEntity && (
+        <EntityModal entityId={null} onClose={() => setCreatingEntity(false)} onChanged={load} />
       )}
     </div>
   );

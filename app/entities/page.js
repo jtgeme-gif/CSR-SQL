@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import PersonModal from '../../components/PersonModal';
 import EntityModal from '../../components/EntityModal';
@@ -15,6 +14,7 @@ export default function EntitiesPage() {
   const [search, setSearch] = useState('');
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
+  const [creatingEntity, setCreatingEntity] = useState(false);
 
   useEffect(() => {
     load();
@@ -64,7 +64,7 @@ export default function EntitiesPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px' }}
           />
-          <Link href="/entities/new" className="btn btn-primary">+ Add Entity</Link>
+          <button className="btn btn-primary" onClick={() => setCreatingEntity(true)}>+ Add Entity</button>
         </div>
       </div>
 
@@ -74,7 +74,7 @@ export default function EntitiesPage() {
       {!loading && !error && filtered.length === 0 && (
         <div className="empty-state">
           <p>{entities.length === 0 ? 'No entities yet.' : 'No entities match your search.'}</p>
-          {entities.length === 0 && <Link href="/entities/new" className="btn btn-primary">Add your first entity</Link>}
+          {entities.length === 0 && <button className="btn btn-primary" onClick={() => setCreatingEntity(true)}>Add your first entity</button>}
         </div>
       )}
 
@@ -122,6 +122,9 @@ export default function EntitiesPage() {
       )}
       {modalEntityId && (
         <EntityModal entityId={modalEntityId} onClose={() => setModalEntityId(null)} onChanged={load} />
+      )}
+      {creatingEntity && (
+        <EntityModal entityId={null} onClose={() => setCreatingEntity(false)} onChanged={load} />
       )}
     </div>
   );
