@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import PersonModal from './PersonModal';
 
 export default function PeopleListView({ title, identityFilter, mediatorFilter }) {
+  const isJudgeList = identityFilter === 'Judge';
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -79,9 +80,19 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
           <thead>
             <tr>
               <th>Name</th>
-              <th>Identity</th>
-              <th>Title</th>
-              <th>Entity</th>
+              {isJudgeList ? (
+                <>
+                  <th>Title</th>
+                  <th>Court</th>
+                  <th>Jurisdiction</th>
+                </>
+              ) : (
+                <>
+                  <th>Identity</th>
+                  <th>Title</th>
+                  <th>Entity</th>
+                </>
+              )}
               <th>Phone</th>
               <th>Email</th>
               <th></th>
@@ -91,9 +102,19 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
             {filtered.map((p) => (
               <tr key={p.id}>
                 <td><a className="row-link" onClick={() => openView(p.id)}>{p.first_name} {p.last_name}</a></td>
-                <td>{p.magjudge ? 'Magistrate Judge' : p.identity}</td>
-                <td>{p.title || '—'}</td>
-                <td>{p.entities?.name || '—'}</td>
+                {isJudgeList ? (
+                  <>
+                    <td>{p.magjudge ? 'Magistrate Judge' : p.identity}</td>
+                    <td>{p.court_level || '—'}</td>
+                    <td>{p.court_jurisdiction || '—'}</td>
+                  </>
+                ) : (
+                  <>
+                    <td>{p.identity}</td>
+                    <td>{p.title || '—'}</td>
+                    <td>{p.entities?.name || '—'}</td>
+                  </>
+                )}
                 <td>{p.phone1 || '—'}</td>
                 <td>{p.email1 || '—'}</td>
                 <td className="row-actions">
