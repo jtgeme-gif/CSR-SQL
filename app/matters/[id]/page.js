@@ -42,8 +42,9 @@ export default function MatterDetailPage() {
   const [newMagJudge, setNewMagJudge] = useState({ person_id: null, person_name: '' });
   const [newMediator, setNewMediator] = useState({ person_id: null, person_name: '' });
 
-  const [addEntityForm, setAddEntityForm] = useState({});
-  const [addPersonForm, setAddPersonForm] = useState({});
+  const [partyModalRole, setPartyModalRole] = useState(null);
+  const [partyModalForm, setPartyModalForm] = useState({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '' });
+  const [savingParty, setSavingParty] = useState(false);
   const [nestedAddForm, setNestedAddForm] = useState({});
 
   const [modalPersonId, setModalPersonId] = useState(null);
@@ -167,23 +168,40 @@ export default function MatterDetailPage() {
   async function removeCasePerson(id) { await supabase.from('case_people').delete().eq('id', id); load(); }
 
   // ---------- Parties ----------
-  function entityFormFor(role) { return addEntityForm[role] || { entity_id: null, entity_name: '' }; }
-  function personFormFor(role) { return addPersonForm[role] || { person_id: null, person_name: '' }; }
-
-  async function addEntityParty(role) {
-    const f = entityFormFor(role);
-    if (!f.entity_id) { alert('Pick or create an entity first.'); return; }
-    const { error } = await supabase.from('case_entities').insert({ matter_id: matterId, entity_id: f.entity_id, role });
-    if (error) { alert(error.message); return; }
-    setAddEntityForm((s) => ({ ...s, [role]: { entity_id: null, entity_name: '' } }));
-    load();
+  function openAddParty(role) {
+    setPartyModalForm({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '' });
+    setPartyModalRole(role);
   }
-  async function addPersonParty(role) {
-    const f = personFormFor(role);
-    if (!f.person_id) { alert('Pick or create a person first.'); return; }
-    const { error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: f.person_id, role });
-    if (error) { alert(error.message); return; }
-    setAddPersonForm((s) => ({ ...s, [role]: { person_id: null, person_name: '' } }));
+
+  async function saveNewParty() {
+    const f = partyModalForm;
+    const role = partyModalRole;
+    if (f.partyType === 'Person' && !f.person_id) { alert('Pick or create a person first.'); return; }
+    if (f.partyType === 'Entity' && !f.entity_id) { alert('Pick or create an entity first.'); return; }
+
+    setSavingParty(true);
+    let newPartyId = null;
+
+    if (f.partyType === 'Person') {
+      const { data, error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: f.person_id, role }).select('id').single();
+      if (error) { alert(error.message); setSavingParty(false); return; }
+      newPartyId = data.id;
+    } else {
+      const { data, error } = await supabase.from('case_entities').insert({ matter_id: matterId, entity_id: f.entity_id, role }).select('id').single();
+      if (error) { alert(error.message); setSavingParty(false); return; }
+      newPartyId = data.id;
+    }
+
+    if (role !== 'Defendant' && f.attorney_id) {
+      const attyPayload = { matter_id: matterId, person_id: f.attorney_id, role: 'Attorney' };
+      if (f.partyType === 'Person') attyPayload.represents_case_person_id = newPartyId;
+      else attyPayload.represents_case_entity_id = newPartyId;
+      const { error: attyError } = await supabase.from('case_people').insert(attyPayload);
+      if (attyError) { alert('Party added, but attaching the attorney failed: ' + attyError.message); }
+    }
+
+    setSavingParty(false);
+    setPartyModalRole(null);
     load();
   }
   async function removeEntityParty(id) { await supabase.from('case_entities').delete().eq('id', id); load(); }
@@ -232,12 +250,13 @@ export default function MatterDetailPage() {
 
   function renderPartyGroup(role) {
     const { entities, people } = partiesForRole(role);
-    const eForm = entityFormFor(role);
-    const pForm = personFormFor(role);
 
     return (
       <div className="party-group" key={role}>
-        <div className="party-group-title">{role}s</div>
+        <div className="party-group-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{role}s</span>
+          <button className="btn-small" onClick={() => openAddParty(role)}>+ Add {role}</button>
+        </div>
         {entities.length === 0 && people.length === 0 && <p className="muted" style={{ margin: '4px 0 10px' }}>None yet.</p>}
 
         {entities.map((ce) => {
@@ -314,12 +333,6 @@ export default function MatterDetailPage() {
           );
         })}
 
-        <div className="add-party-form">
-          <EntityPicker value={eForm.entity_id} valueName={eForm.entity_name} onChange={(id, name) => setAddEntityForm((s) => ({ ...s, [role]: { entity_id: id, entity_name: name } }))} />
-          <button className="btn-small" onClick={() => addEntityParty(role)}>+ Add Entity</button>
-          <PersonPicker value={pForm.person_id} valueName={pForm.person_name} onChange={(id, name) => setAddPersonForm((s) => ({ ...s, [role]: { person_id: id, person_name: name } }))} />
-          <button className="btn-small" onClick={() => addPersonParty(role)}>+ Add Person</button>
-        </div>
       </div>
     );
   }
@@ -569,6 +582,74 @@ export default function MatterDetailPage() {
 
       {modalPersonId && <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />}
       {modalEntityId && <EntityModal entityId={modalEntityId} onClose={() => setModalEntityId(null)} onChanged={load} />}
+
+      {partyModalRole && (
+        <div className="modal-overlay" onClick={() => setPartyModalRole(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h2>Add {partyModalRole}</h2>
+              <button className="modal-close" onClick={() => setPartyModalRole(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-field">
+                <label>Party Type</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className={`btn-small ${partyModalForm.partyType === 'Person' ? 'btn-primary' : ''}`}
+                    onClick={() => setPartyModalForm((f) => ({ ...f, partyType: 'Person' }))}
+                  >
+                    Person
+                  </button>
+                  <button
+                    className={`btn-small ${partyModalForm.partyType === 'Entity' ? 'btn-primary' : ''}`}
+                    onClick={() => setPartyModalForm((f) => ({ ...f, partyType: 'Entity' }))}
+                  >
+                    Entity
+                  </button>
+                </div>
+              </div>
+
+              {partyModalForm.partyType === 'Person' ? (
+                <div className="form-field">
+                  <label>{partyModalRole}</label>
+                  <PersonPicker
+                    value={partyModalForm.person_id}
+                    valueName={partyModalForm.person_name}
+                    onChange={(id, name) => setPartyModalForm((f) => ({ ...f, person_id: id, person_name: name }))}
+                  />
+                </div>
+              ) : (
+                <div className="form-field">
+                  <label>{partyModalRole}</label>
+                  <EntityPicker
+                    value={partyModalForm.entity_id}
+                    valueName={partyModalForm.entity_name}
+                    onChange={(id, name) => setPartyModalForm((f) => ({ ...f, entity_id: id, entity_name: name }))}
+                  />
+                </div>
+              )}
+
+              {partyModalRole !== 'Defendant' && (
+                <div className="form-field">
+                  <label>Attorney (optional)</label>
+                  <PersonPicker
+                    value={partyModalForm.attorney_id}
+                    valueName={partyModalForm.attorney_name}
+                    onChange={(id, name) => setPartyModalForm((f) => ({ ...f, attorney_id: id, attorney_name: name }))}
+                  />
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button className="btn btn-primary" onClick={saveNewParty} disabled={savingParty}>
+                  {savingParty ? 'Saving…' : `Add ${partyModalRole}`}
+                </button>
+                <button className="btn" onClick={() => setPartyModalRole(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
