@@ -513,7 +513,7 @@ export default function MatterDetailPage() {
         )}
 
         {!editingCourt && (
-          <div className="detail-grid">
+          <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
             {[
               { label: 'Judge', rows: judgeRows },
               { label: 'Magistrate Judge', rows: magJudgeRows },
@@ -539,7 +539,7 @@ export default function MatterDetailPage() {
         )}
 
         {editingCourt && (
-          <div className="form-row">
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
             {[
               { label: 'Judge', role: 'Judge', rows: judgeRows, form: newJudge, setForm: setNewJudge },
               { label: 'Magistrate Judge', role: 'Magistrate Judge', rows: magJudgeRows, form: newMagJudge, setForm: setNewMagJudge },
