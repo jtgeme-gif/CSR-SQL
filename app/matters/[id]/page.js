@@ -128,7 +128,8 @@ export default function MatterDetailPage() {
 
   async function addStaff() {
     if (!newStaffPick.staff_id) { alert('Pick a staff member first.'); return; }
-    await supabase.from('matter_staff').insert({ matter_id: matterId, staff_id: newStaffPick.staff_id });
+    const { error } = await supabase.from('matter_staff').insert({ matter_id: matterId, staff_id: newStaffPick.staff_id });
+    if (error) { alert(error.message); return; }
     setNewStaffPick({ staff_id: null, staff_name: '' });
     load();
   }
