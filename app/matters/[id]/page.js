@@ -26,6 +26,7 @@ export default function MatterDetailPage() {
   const [casePeople, setCasePeople] = useState([]);
   const [claimReps, setClaimReps] = useState([]);
   const [keyDeadlines, setKeyDeadlines] = useState([]);
+  const [starredItems, setStarredItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -83,8 +84,11 @@ export default function MatterDetailPage() {
     const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1, entities(name))').eq('matter_id', matterId).order('created_at');
     setClaimReps(crData || []);
 
-    const { data: kdData } = await supabase.from('events').select('*, event_types(label)').eq('matter_id', matterId).eq('is_key_deadline', true).order('event_date');
+    const { data: kdData } = await supabase.from('events').select('*, event_types(label)').eq('matter_id', matterId).eq('pin_to_overview', true).order('event_date');
     setKeyDeadlines(kdData || []);
+
+    const { data: starData } = await supabase.from('events').select('*, event_types(label)').eq('matter_id', matterId).eq('star_to_infobar', true).order('event_date').limit(3);
+    setStarredItems(starData || []);
 
     setLoading(false);
   }
@@ -476,7 +480,12 @@ export default function MatterDetailPage() {
           <span><strong>Client File:</strong> {caseEntities.filter((ce) => ce.claim_rep_file_number).map((ce) => `${ce.entities?.name}: ${ce.claim_rep_file_number}`).join(' // ') || '—'}</span>
           <span className="info-bar-link">📁 File Folder</span>
           <span className="info-bar-link">📓 OneNote</span>
-          <span><strong>Answer Due:</strong> —</span>
+          {starredItems.length === 0 && <span className="muted">No starred dates yet</span>}
+          {starredItems.map((ev) => (
+            <span key={ev.id}>
+              ★ {ev.event_types?.label || 'Date'} {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
+            </span>
+          ))}
         </div>
 
         {/* TAB ROW */}
@@ -601,12 +610,13 @@ export default function MatterDetailPage() {
           <h3>Key Deadlines</h3>
         </div>
         {keyDeadlines.length === 0 && (
-          <p className="muted">No key deadlines tagged yet. Deadlines get flagged here from the Events/Scheduling tab.</p>
+          <p className="muted">No dates pinned yet. Pin a date from the Events/Scheduling tab to have it show here.</p>
         )}
         {keyDeadlines.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {keyDeadlines.map((ev) => (
               <div key={ev.id} className="party-row">
+                <span>📌</span>
                 <span className="badge badge-red">
                   {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
                 </span>
