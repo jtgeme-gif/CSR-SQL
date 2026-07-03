@@ -392,6 +392,17 @@ export default function MatterDetailPage() {
                 </div>
               )}
 
+              {role === 'Defendant' && (
+                <div className="nested-block">
+                  <span className="nested-label">Contact:</span>
+                  <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    {cp.people?.email1 && <a href={mailtoHref(cp.people.email1)}>{cp.people.email1}</a>}
+                    {cp.people?.phone1 && <span>{formatPhoneDisplay(cp.people.phone1)}</span>}
+                    {!cp.people?.email1 && !cp.people?.phone1 && <span className="muted">No contact info on file.</span>}
+                  </div>
+                </div>
+              )}
+
               {(role === 'Plaintiff' || role === 'Co-Defendant') && (
                 <div className="form-checkbox" style={{ marginTop: '4px', marginBottom: 0 }}>
                   <input type="checkbox" id={`prose-${cp.id}`} checked={!!cp.pro_se} onChange={() => togglePartyProSe(cp)} />
