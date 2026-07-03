@@ -208,7 +208,7 @@ export default function NewPersonPage() {
         </div>
 
         <div className="form-field">
-          <label>Field of Expertise</label>
+          <label>Expertise if Expert / Other Information</label>
           <input type="text" value={form.field_of_expertise} onChange={(e) => update('field_of_expertise', e.target.value)} />
         </div>
 

@@ -134,7 +134,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
                 </>
               )}
               {person.field_of_expertise && (
-                <div className="detail-card"><span className="detail-label">Field of Expertise</span><span className="detail-value">{person.field_of_expertise}</span></div>
+                <div className="detail-card"><span className="detail-label">Expertise if Expert / Other Information</span><span className="detail-value">{person.field_of_expertise}</span></div>
               )}
               {person.notes && (
                 <div className="detail-card" style={{ gridColumn: '1 / -1' }}><span className="detail-label">Notes</span><span className="detail-value">{person.notes}</span></div>
@@ -214,7 +214,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
               <input type="checkbox" id="edit-mediator" checked={!!form.mediator} onChange={(e) => update('mediator', e.target.checked)} />
               <label htmlFor="edit-mediator">Mediator</label>
             </div>
-            <div className="form-field"><label>Field of Expertise</label><input value={form.field_of_expertise || ''} onChange={(e) => update('field_of_expertise', e.target.value)} /></div>
+            <div className="form-field"><label>Expertise if Expert / Other Information</label><input value={form.field_of_expertise || ''} onChange={(e) => update('field_of_expertise', e.target.value)} /></div>
             <div className="form-field"><label>Notes</label><input value={form.notes || ''} onChange={(e) => update('notes', e.target.value)} /></div>
 
             {error && <div className="error-box">{error}</div>}
