@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import PhoneInput from './PhoneInput';
+import { formatPhoneDisplay } from '../lib/formatPhone';
 
 const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor'];
 const BLANK_FORM = { name: '', entity_type: '', address: '', city: '', state: '', zip: '', phone: '', email: '', website: '', notes: '' };
@@ -102,7 +104,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
             <div className="detail-grid">
               <div className="detail-card"><span className="detail-label">Entity Type</span><span className="detail-value">{entity.entity_type || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Address</span><span className="detail-value">{[entity.address, entity.city, entity.state, entity.zip].filter(Boolean).join(', ') || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Phone</span><span className="detail-value">{entity.phone || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">Phone</span><span className="detail-value">{formatPhoneDisplay(entity.phone) || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Email</span><span className="detail-value">{entity.email || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Website</span><span className="detail-value">{entity.website || '—'}</span></div>
               {entity.notes && (
@@ -133,7 +135,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
               <div className="form-field"><label>Zip</label><input value={form.zip || ''} onChange={(e) => update('zip', e.target.value)} /></div>
             </div>
             <div className="form-row">
-              <div className="form-field"><label>Phone</label><input value={form.phone || ''} onChange={(e) => update('phone', e.target.value)} /></div>
+              <div className="form-field"><label>Phone</label><PhoneInput value={form.phone} onChange={(v) => update('phone', v)} /></div>
               <div className="form-field"><label>Email</label><input value={form.email || ''} onChange={(e) => update('email', e.target.value)} /></div>
             </div>
             <div className="form-field"><label>Website</label><input value={form.website || ''} onChange={(e) => update('website', e.target.value)} /></div>

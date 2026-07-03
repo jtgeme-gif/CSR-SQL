@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import PersonModal from '../../components/PersonModal';
 import EntityModal from '../../components/EntityModal';
+import { formatPhoneDisplay } from '../../lib/formatPhone';
 
 export default function EntitiesPage() {
   const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor'];
@@ -116,7 +117,7 @@ export default function EntitiesPage() {
                         <a className="row-link" onClick={() => setModalPersonId(p.id)}>{p.first_name} {p.last_name}</a>
                         <span className="chip">{p.identity}</span>
                         <span className="muted">{p.title || '—'}</span>
-                        <span className="muted">{p.phone1 || '—'}</span>
+                        <span className="muted">{formatPhoneDisplay(p.phone1) || '—'}</span>
                         <span className="muted">{p.email1 || '—'}</span>
                       </div>
                     ))}

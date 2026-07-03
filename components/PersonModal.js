@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import EntityPicker from './EntityPicker';
+import PhoneInput from './PhoneInput';
+import { formatPhoneDisplay } from '../lib/formatPhone';
 
 const IDENTITIES = ['Individual', 'Attorney', 'Judge', 'Client Rep'];
 
@@ -146,8 +148,8 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
               <div className="detail-card"><span className="detail-label">Title</span><span className="detail-value">{person.title || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Entity</span><span className="detail-value">{person.entities?.name || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Mediator</span><span className="detail-value">{person.mediator ? 'Yes' : 'No'}</span></div>
-              <div className="detail-card"><span className="detail-label">{person.phone1_label || 'Phone 1'}</span><span className="detail-value">{person.phone1 || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">{person.phone2_label || 'Phone 2'}</span><span className="detail-value">{person.phone2 || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">{person.phone1_label || 'Phone 1'}</span><span className="detail-value">{formatPhoneDisplay(person.phone1) || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">{person.phone2_label || 'Phone 2'}</span><span className="detail-value">{formatPhoneDisplay(person.phone2) || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">{person.email1_label || 'Email 1'}</span><span className="detail-value">{person.email1 || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">{person.email2_label || 'Email 2'}</span><span className="detail-value">{person.email2 || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Address</span><span className="detail-value">{[person.address, person.city, person.state, person.zip].filter(Boolean).join(', ') || '—'}</span></div>
@@ -191,7 +193,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
             </div>
             <div className="form-field">
               <label>Entity</label>
-              <EntityPicker value={form.entity_id} valueName={form.entity_name} onChange={handleEntityChange} />
+              <EntityPicker value={form.entity_id} valueName={form.entity_name} onChange={handleEntityChange} allowCreate={false} />
             </div>
             {form.identity === 'Judge' && (
               <div className="form-row">
@@ -215,12 +217,12 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
               <div className="form-field">
                 <label>Phone 1</label>
                 <input className="field-sublabel" placeholder="Label" value={form.phone1_label || ''} onChange={(e) => update('phone1_label', e.target.value)} />
-                <input value={form.phone1 || ''} onChange={(e) => update('phone1', e.target.value)} />
+                <PhoneInput value={form.phone1} onChange={(v) => update('phone1', v)} />
               </div>
               <div className="form-field">
                 <label>Phone 2</label>
                 <input className="field-sublabel" placeholder="Label" value={form.phone2_label || ''} onChange={(e) => update('phone2_label', e.target.value)} />
-                <input value={form.phone2 || ''} onChange={(e) => update('phone2', e.target.value)} />
+                <PhoneInput value={form.phone2} onChange={(v) => update('phone2', v)} />
               </div>
             </div>
             <div className="form-row">

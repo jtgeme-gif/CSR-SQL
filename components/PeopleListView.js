@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PersonModal from './PersonModal';
+import { formatPhoneDisplay } from '../lib/formatPhone';
 
 export default function PeopleListView({ title, identityFilter, mediatorFilter }) {
   const isJudgeList = identityFilter === 'Judge';
@@ -115,7 +116,7 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
                     <td>{p.entities?.name || '—'}</td>
                   </>
                 )}
-                <td>{p.phone1 || '—'}</td>
+                <td>{formatPhoneDisplay(p.phone1) || '—'}</td>
                 <td>{p.email1 || '—'}</td>
                 <td className="row-actions">
                   <button className="btn-small" onClick={() => openView(p.id)}>View</button>
