@@ -6,12 +6,14 @@ import PersonModal from '../../components/PersonModal';
 import EntityModal from '../../components/EntityModal';
 
 export default function EntitiesPage() {
+  const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor'];
   const [entities, setEntities] = useState([]);
   const [peopleByEntity, setPeopleByEntity] = useState({});
   const [expanded, setExpanded] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
   const [creatingEntity, setCreatingEntity] = useState(false);
@@ -50,7 +52,11 @@ export default function EntitiesPage() {
     setExpanded((e) => ({ ...e, [id]: !e[id] }));
   }
 
-  const filtered = entities.filter((e) => e.name?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = entities.filter((e) => {
+    if (!e.name?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (typeFilter !== 'all' && e.entity_type !== typeFilter) return false;
+    return true;
+  });
 
   return (
     <div className="page">
@@ -64,6 +70,10 @@ export default function EntitiesPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px' }}
           />
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="all">All types</option>
+            {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
           <button className="btn btn-primary" onClick={() => setCreatingEntity(true)}>+ Add Entity</button>
         </div>
       </div>
@@ -88,6 +98,7 @@ export default function EntitiesPage() {
                 <div className="entity-accordion-header" onClick={() => toggle(e.id)}>
                   <span className={`entity-accordion-caret ${isOpen ? 'open' : ''}`}>▶</span>
                   <span className="entity-accordion-name">{e.name}</span>
+                  {e.entity_type && <span className="badge badge-blue">{e.entity_type}</span>}
                   <span className="entity-accordion-count">{people.length} {people.length === 1 ? 'person' : 'people'}</span>
                   <span className="entity-accordion-meta">{[e.city, e.state].filter(Boolean).join(', ')}</span>
                   <button

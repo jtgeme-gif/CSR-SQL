@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-const BLANK_FORM = { name: '', address: '', city: '', state: '', zip: '', phone: '', email: '', website: '', notes: '' };
+const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor'];
+const BLANK_FORM = { name: '', entity_type: '', address: '', city: '', state: '', zip: '', phone: '', email: '', website: '', notes: '' };
 
 // entityId === null/undefined => Create mode (blank form, opens straight into editing)
 export default function EntityModal({ entityId, startInEdit, onClose, onChanged }) {
@@ -39,6 +40,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
   function buildPayload() {
     return {
       name: form.name?.trim(),
+      entity_type: form.entity_type || null,
       address: form.address?.trim() || null,
       city: form.city?.trim() || null,
       state: form.state?.trim() || null,
@@ -98,6 +100,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
         {!loading && !isCreate && entity && !editing && (
           <div className="modal-body">
             <div className="detail-grid">
+              <div className="detail-card"><span className="detail-label">Entity Type</span><span className="detail-value">{entity.entity_type || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Address</span><span className="detail-value">{[entity.address, entity.city, entity.state, entity.zip].filter(Boolean).join(', ') || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Phone</span><span className="detail-value">{entity.phone || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Email</span><span className="detail-value">{entity.email || '—'}</span></div>
@@ -116,6 +119,13 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
         {(isCreate || editing) && form && (
           <div className="modal-body">
             <div className="form-field"><label>Name *</label><input value={form.name || ''} onChange={(e) => update('name', e.target.value)} /></div>
+            <div className="form-field">
+              <label>Entity Type</label>
+              <select value={form.entity_type || ''} onChange={(e) => update('entity_type', e.target.value)}>
+                <option value="">— Unclassified —</option>
+                {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
             <div className="form-field"><label>Address</label><input value={form.address || ''} onChange={(e) => update('address', e.target.value)} /></div>
             <div className="form-row">
               <div className="form-field"><label>City</label><input value={form.city || ''} onChange={(e) => update('city', e.target.value)} /></div>

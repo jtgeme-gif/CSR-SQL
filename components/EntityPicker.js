@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 // Props: value (entity id or ''), valueName (display name for the current value),
 // onChange(entityId, entityName, entityRecord) — entityRecord is the full row
 // (used by parent forms to auto-fill address fields), or null when cleared/typing.
-export default function EntityPicker({ value, valueName, onChange }) {
+export default function EntityPicker({ value, valueName, onChange, allowCreate = true }) {
   const [entities, setEntities] = useState([]);
   const [inputValue, setInputValue] = useState(valueName || '');
   const [open, setOpen] = useState(false);
@@ -96,10 +96,13 @@ export default function EntityPicker({ value, valueName, onChange }) {
               {ent.name}
             </div>
           ))}
-          {!exactMatch && (
+          {!exactMatch && allowCreate && (
             <div className="entity-picker-option entity-picker-create" onClick={createEntity}>
               {creating ? 'Creating…' : `+ Add "${inputValue.trim()}" as a new entity`}
             </div>
+          )}
+          {!exactMatch && !allowCreate && matches.length === 0 && (
+            <div className="entity-picker-empty">No matching entity. Add it from the Entities page first.</div>
           )}
         </div>
       )}
