@@ -70,7 +70,7 @@ export default function MatterDetailPage() {
     const { data: ceData } = await supabase.from('case_entities').select('*, entities(id, name)').eq('matter_id', matterId);
     setCaseEntities(ceData || []);
 
-    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1)').eq('matter_id', matterId);
+    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1, website)').eq('matter_id', matterId);
     setCasePeople(cpData || []);
 
     const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1, entities(name))').eq('matter_id', matterId).order('created_at');
@@ -512,23 +512,53 @@ export default function MatterDetailPage() {
           </div>
         )}
 
-        {[
-          { label: 'Judge', role: 'Judge', rows: judgeRows, form: newJudge, setForm: setNewJudge },
-          { label: 'Magistrate Judge', role: 'Magistrate Judge', rows: magJudgeRows, form: newMagJudge, setForm: setNewMagJudge },
-          { label: 'Mediator', role: 'Mediator', rows: mediatorRows, form: newMediator, setForm: setNewMediator },
-        ].map(({ label, role, rows, form, setForm }) => (
-          <div key={role} className="nested-block" style={{ marginBottom: '14px' }}>
-            <span className="nested-label">{label}:</span>
-            {rows.length === 0 && <span className="muted">None yet.</span>}
-            {rows.map((r) => (
-              <span key={r.id} className="chip chip-removable">{r.people?.first_name} {r.people?.last_name}<button onClick={() => removeCasePerson(r.id)}>×</button></span>
+        {!editingCourt && (
+          <div className="detail-grid">
+            {[
+              { label: 'Judge', rows: judgeRows },
+              { label: 'Magistrate Judge', rows: magJudgeRows },
+              { label: 'Mediator', rows: mediatorRows },
+            ].map(({ label, rows }) => (
+              <div className="detail-card" key={label}>
+                <span className="detail-label">{label}</span>
+                <span className="detail-value">
+                  {rows.length === 0 ? '—' : rows.map((r, i) => (
+                    <span key={r.id}>
+                      {r.people?.website ? (
+                        <a className="row-link" href={r.people.website} target="_blank" rel="noopener noreferrer">{r.people?.first_name} {r.people?.last_name}</a>
+                      ) : (
+                        <span>{r.people?.first_name} {r.people?.last_name}</span>
+                      )}
+                      {i < rows.length - 1 ? ', ' : ''}
+                    </span>
+                  ))}
+                </span>
+              </div>
             ))}
-            <div className="nested-add-row">
-              <PersonPicker value={form.person_id} valueName={form.person_name} onChange={(id, name) => setForm({ person_id: id, person_name: name })} />
-              <button className="btn-small" onClick={() => addCourtRole(role, form, setForm)}>+ Add</button>
-            </div>
           </div>
-        ))}
+        )}
+
+        {editingCourt && (
+          <div className="form-row">
+            {[
+              { label: 'Judge', role: 'Judge', rows: judgeRows, form: newJudge, setForm: setNewJudge },
+              { label: 'Magistrate Judge', role: 'Magistrate Judge', rows: magJudgeRows, form: newMagJudge, setForm: setNewMagJudge },
+              { label: 'Mediator', role: 'Mediator', rows: mediatorRows, form: newMediator, setForm: setNewMediator },
+            ].map(({ label, role, rows, form, setForm }) => (
+              <div key={role} className="nested-block form-field">
+                <span className="nested-label">{label}:</span>
+                {rows.length === 0 && <span className="muted">None yet.</span>}
+                {rows.map((r) => (
+                  <span key={r.id} className="chip chip-removable">{r.people?.first_name} {r.people?.last_name}<button onClick={() => removeCasePerson(r.id)}>×</button></span>
+                ))}
+                <div className="nested-add-row">
+                  <PersonPicker value={form.person_id} valueName={form.person_name} onChange={(id, name) => setForm({ person_id: id, person_name: name })} />
+                  <button className="btn-small" onClick={() => addCourtRole(role, form, setForm)}>+ Add</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* PARTIES */}
