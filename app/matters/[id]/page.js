@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
+import { formatPhoneDisplay } from '../../../lib/formatPhone';
 import EntityPicker from '../../../components/EntityPicker';
 import PersonPicker from '../../../components/PersonPicker';
 import PersonModal from '../../../components/PersonModal';
@@ -43,9 +44,12 @@ export default function MatterDetailPage() {
   const [newMediator, setNewMediator] = useState({ person_id: null, person_name: '' });
 
   const [partyModalRole, setPartyModalRole] = useState(null);
-  const [partyModalForm, setPartyModalForm] = useState({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '' });
+  const [partyModalForm, setPartyModalForm] = useState({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '', capacity: '' });
   const [savingParty, setSavingParty] = useState(false);
   const [nestedAddForm, setNestedAddForm] = useState({});
+  const [openPopover, setOpenPopover] = useState(null);
+  const [editingCapacityFor, setEditingCapacityFor] = useState(null);
+  const [capacityDraft, setCapacityDraft] = useState('');
 
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
@@ -71,7 +75,7 @@ export default function MatterDetailPage() {
     const { data: ceData } = await supabase.from('case_entities').select('*, entities(id, name)').eq('matter_id', matterId);
     setCaseEntities(ceData || []);
 
-    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1, website)').eq('matter_id', matterId);
+    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1, phone1, website)').eq('matter_id', matterId);
     setCasePeople(cpData || []);
 
     const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1, entities(name))').eq('matter_id', matterId).order('created_at');
@@ -169,7 +173,7 @@ export default function MatterDetailPage() {
 
   // ---------- Parties ----------
   function openAddParty(role) {
-    setPartyModalForm({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '' });
+    setPartyModalForm({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '', attorney_id: null, attorney_name: '', capacity: '' });
     setPartyModalRole(role);
   }
 
@@ -183,7 +187,7 @@ export default function MatterDetailPage() {
     let newPartyId = null;
 
     if (f.partyType === 'Person') {
-      const { data, error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: f.person_id, role }).select('id').single();
+      const { data, error } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: f.person_id, role, capacity: f.capacity?.trim() || null }).select('id').single();
       if (error) { alert(error.message); setSavingParty(false); return; }
       newPartyId = data.id;
     } else {
@@ -210,6 +214,7 @@ export default function MatterDetailPage() {
   function nestedKey(kind, id) { return `${kind}-${id}`; }
   function nestedFormFor(key) { return nestedAddForm[key] || { person_id: null, person_name: '' }; }
   function updateNestedForm(key, val) { setNestedAddForm((s) => ({ ...s, [key]: val })); }
+  function togglePopover(key) { setOpenPopover((cur) => (cur === key ? null : key)); }
 
   async function addPOC(caseEntityId, entityGlobalId) {
     const key = nestedKey('poc', caseEntityId);
@@ -220,6 +225,7 @@ export default function MatterDetailPage() {
     });
     if (error) { alert(error.message); return; }
     updateNestedForm(key, { person_id: null, person_name: '' });
+    setOpenPopover(null);
     load();
   }
 
@@ -233,10 +239,36 @@ export default function MatterDetailPage() {
     const { error } = await supabase.from('case_people').insert(payload);
     if (error) { alert(error.message); return; }
     updateNestedForm(key, { person_id: null, person_name: '' });
+    setOpenPopover(null);
     load();
   }
 
-  if (loading) return <div className="page"><p className="muted">Loading…</p></div>;
+  async function saveCapacity(cpId) {
+    const { error } = await supabase.from('case_people').update({ capacity: capacityDraft.trim() || null }).eq('id', cpId);
+    if (error) { alert(error.message); return; }
+    setEditingCapacityFor(null);
+    load();
+  }
+
+  function mailtoHref(email) {
+    if (!email) return null;
+    return `mailto:${email}?subject=${encodeURIComponent(matter?.case_name || '')}`;
+  }
+
+  function renderPersonChip(cp, onRemove) {
+    const name = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim();
+    const href = mailtoHref(cp.people?.email1);
+    const phone = formatPhoneDisplay(cp.people?.phone1);
+    return (
+      <span key={cp.id} className="chip chip-removable" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '5px 10px' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {href ? <a href={href}>{name}</a> : <span>{name}</span>}
+          <button onClick={onRemove}>×</button>
+        </span>
+        {phone && <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{phone}</span>}
+      </span>
+    );
+  } return <div className="page"><p className="muted">Loading…</p></div>;
   if (error) return <div className="page"><div className="error-box">{error}</div></div>;
   if (!matter) return null;
 
@@ -278,26 +310,38 @@ export default function MatterDetailPage() {
               {role === 'Defendant' && (
                 <div className="nested-block">
                   <span className="nested-label">POC(s):</span>
-                  {pocs.map((p) => (
-                    <span key={p.id} className="chip chip-removable">{p.people?.first_name} {p.people?.last_name}<button onClick={() => removeCasePerson(p.id)}>×</button></span>
-                  ))}
-                  <div className="nested-add-row">
-                    <PersonPicker value={pocForm.person_id} valueName={pocForm.person_name} onChange={(id, name) => updateNestedForm(pocKey, { person_id: id, person_name: name })} />
-                    <button className="btn-small" onClick={() => addPOC(ce.id, ce.entities?.id)}>+ Add POC</button>
-                  </div>
+                  {pocs.map((p) => renderPersonChip(p, () => removeCasePerson(p.id)))}
+                  <span style={{ position: 'relative' }}>
+                    <button className="btn-small" onClick={() => togglePopover(pocKey)}>+ Add POC</button>
+                    {openPopover === pocKey && (
+                      <div className="popover">
+                        <PersonPicker value={pocForm.person_id} valueName={pocForm.person_name} onChange={(id, name) => updateNestedForm(pocKey, { person_id: id, person_name: name })} />
+                        <div className="modal-actions" style={{ marginTop: '8px' }}>
+                          <button className="btn-small btn-primary" onClick={() => addPOC(ce.id, ce.entities?.id)}>Add</button>
+                          <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </span>
                 </div>
               )}
 
               {(role === 'Plaintiff' || role === 'Co-Defendant') && (
                 <div className="nested-block">
                   <span className="nested-label">Attorney(s):</span>
-                  {attys.map((a) => (
-                    <span key={a.id} className="chip chip-removable">{a.people?.first_name} {a.people?.last_name}<button onClick={() => removeCasePerson(a.id)}>×</button></span>
-                  ))}
-                  <div className="nested-add-row">
-                    <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
-                    <button className="btn-small" onClick={() => addAttorney('entity', ce.id)}>+ Add Attorney</button>
-                  </div>
+                  {attys.map((a) => renderPersonChip(a, () => removeCasePerson(a.id)))}
+                  <span style={{ position: 'relative' }}>
+                    <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
+                    {openPopover === attyKey && (
+                      <div className="popover">
+                        <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                        <div className="modal-actions" style={{ marginTop: '8px' }}>
+                          <button className="btn-small btn-primary" onClick={() => addAttorney('entity', ce.id)}>Add</button>
+                          <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </span>
                 </div>
               )}
             </div>
@@ -308,25 +352,53 @@ export default function MatterDetailPage() {
           const attyKey = nestedKey('atty-person', cp.id);
           const attyForm = nestedFormFor(attyKey);
           const attys = casePeople.filter((c) => c.role === 'Attorney' && c.represents_case_person_id === cp.id);
+          const displayName = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim() + (cp.capacity ? ` ${cp.capacity}` : '');
 
           return (
             <div key={cp.id} className="party-card">
               <div className="party-card-header">
-                <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{cp.people?.first_name} {cp.people?.last_name}</a>
+                <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{displayName}</a>
                 <span className="badge badge-gray">Person</span>
                 <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>
               </div>
 
+              {editingCapacityFor === cp.id ? (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                  <input
+                    style={{ flex: 1, maxWidth: '280px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
+                    placeholder="as Guardian of Codi Smith"
+                    value={capacityDraft}
+                    onChange={(e) => setCapacityDraft(e.target.value)}
+                  />
+                  <button className="btn-small btn-primary" onClick={() => saveCapacity(cp.id)}>Save</button>
+                  <button className="btn-small" onClick={() => setEditingCapacityFor(null)}>Cancel</button>
+                </div>
+              ) : (
+                <div
+                  className="muted"
+                  style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }}
+                  onClick={() => { setEditingCapacityFor(cp.id); setCapacityDraft(cp.capacity || ''); }}
+                >
+                  {cp.capacity ? 'Edit capacity' : '+ Add capacity (e.g. Guardian, PR)'}
+                </div>
+              )}
+
               {(role === 'Plaintiff' || role === 'Co-Defendant') && (
                 <div className="nested-block">
                   <span className="nested-label">Attorney(s):</span>
-                  {attys.map((a) => (
-                    <span key={a.id} className="chip chip-removable">{a.people?.first_name} {a.people?.last_name}<button onClick={() => removeCasePerson(a.id)}>×</button></span>
-                  ))}
-                  <div className="nested-add-row">
-                    <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
-                    <button className="btn-small" onClick={() => addAttorney('person', cp.id)}>+ Add Attorney</button>
-                  </div>
+                  {attys.map((a) => renderPersonChip(a, () => removeCasePerson(a.id)))}
+                  <span style={{ position: 'relative' }}>
+                    <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
+                    {openPopover === attyKey && (
+                      <div className="popover">
+                        <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                        <div className="modal-actions" style={{ marginTop: '8px' }}>
+                          <button className="btn-small btn-primary" onClick={() => addAttorney('person', cp.id)}>Add</button>
+                          <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </span>
                 </div>
               )}
             </div>
@@ -610,14 +682,24 @@ export default function MatterDetailPage() {
               </div>
 
               {partyModalForm.partyType === 'Person' ? (
-                <div className="form-field">
-                  <label>{partyModalRole}</label>
-                  <PersonPicker
-                    value={partyModalForm.person_id}
-                    valueName={partyModalForm.person_name}
-                    onChange={(id, name) => setPartyModalForm((f) => ({ ...f, person_id: id, person_name: name }))}
-                  />
-                </div>
+                <>
+                  <div className="form-field">
+                    <label>{partyModalRole}</label>
+                    <PersonPicker
+                      value={partyModalForm.person_id}
+                      valueName={partyModalForm.person_name}
+                      onChange={(id, name) => setPartyModalForm((f) => ({ ...f, person_id: id, person_name: name }))}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>Capacity (optional)</label>
+                    <input
+                      value={partyModalForm.capacity}
+                      onChange={(e) => setPartyModalForm((f) => ({ ...f, capacity: e.target.value }))}
+                      placeholder="as Guardian of Codi Smith"
+                    />
+                  </div>
+                </>
               ) : (
                 <div className="form-field">
                   <label>{partyModalRole}</label>

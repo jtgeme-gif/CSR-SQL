@@ -556,6 +556,21 @@ a:hover {
 }
 
 /* Row link / inline row actions */
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 10px;
+  z-index: 50;
+  min-width: 260px;
+}
+.chip-removable {
+  vertical-align: top;
+}
 .row-link {
   color: var(--blue);
   cursor: pointer;
