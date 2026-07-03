@@ -62,14 +62,15 @@ export default function MattersPage() {
     // Assigned staff (internal "Attorney" column), keyed by matter
     let staffByMatter = {};
     if (matterIds.length > 0) {
-      const { data: staff } = await supabase
+      const { data: staffRows } = await supabase
         .from('matter_staff')
-        .select('matter_id, staff_name')
+        .select('matter_id, staff_name, staff(first_name, last_name)')
         .in('matter_id', matterIds);
-      (staff || []).forEach((s) => {
+      (staffRows || []).forEach((s) => {
+        const name = s.staff ? `${s.staff.first_name || ''} ${s.staff.last_name || ''}`.trim() : s.staff_name;
         staffByMatter[s.matter_id] = staffByMatter[s.matter_id]
-          ? `${staffByMatter[s.matter_id]}, ${s.staff_name}`
-          : s.staff_name;
+          ? `${staffByMatter[s.matter_id]}, ${name}`
+          : name;
       });
     }
 

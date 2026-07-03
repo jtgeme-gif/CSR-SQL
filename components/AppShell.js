@@ -82,6 +82,9 @@ export default function AppShell({ session, onSignOut, children }) {
             </Link>
 
             <div className="nav-section-label">Admin</div>
+            <Link href="/staff" className={`nav-item ${isActive('/staff') ? 'active' : ''}`}>
+              Staff List
+            </Link>
             <span className="nav-item disabled">Settings</span>
 
             <div className="nav-section-label">Starred Matters</div>

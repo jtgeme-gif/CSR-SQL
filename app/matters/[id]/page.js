@@ -7,6 +7,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { formatPhoneDisplay } from '../../../lib/formatPhone';
 import EntityPicker from '../../../components/EntityPicker';
 import PersonPicker from '../../../components/PersonPicker';
+import StaffPicker from '../../../components/StaffPicker';
 import PersonModal from '../../../components/PersonModal';
 import EntityModal from '../../../components/EntityModal';
 
@@ -32,7 +33,7 @@ export default function MatterDetailPage() {
   const [idForm, setIdForm] = useState(null);
   const [savingId, setSavingId] = useState(false);
 
-  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffPick, setNewStaffPick] = useState({ staff_id: null, staff_name: '' });
   const [newClaimRep, setNewClaimRep] = useState({ person_id: null, person_name: '', claim_number: '', label: '' });
 
   // Court & Jurisdiction
@@ -69,7 +70,7 @@ export default function MatterDetailPage() {
     setIdForm(m);
     setCourtForm(m);
 
-    const { data: staffData } = await supabase.from('matter_staff').select('*').eq('matter_id', matterId).order('created_at');
+    const { data: staffData } = await supabase.from('matter_staff').select('*, staff(id, first_name, last_name)').eq('matter_id', matterId).order('created_at');
     setStaff(staffData || []);
 
     const { data: ceData } = await supabase.from('case_entities').select('*, entities(id, name)').eq('matter_id', matterId);
@@ -120,10 +121,15 @@ export default function MatterDetailPage() {
   }
 
   // ---------- Assigned staff (behind Case Identification Edit) ----------
+  function staffDisplayName(s) {
+    if (s.staff) return `${s.staff.first_name || ''} ${s.staff.last_name || ''}`.trim();
+    return s.staff_name || 'Unknown';
+  }
+
   async function addStaff() {
-    if (!newStaffName.trim()) return;
-    await supabase.from('matter_staff').insert({ matter_id: matterId, staff_name: newStaffName.trim() });
-    setNewStaffName('');
+    if (!newStaffPick.staff_id) { alert('Pick a staff member first.'); return; }
+    await supabase.from('matter_staff').insert({ matter_id: matterId, staff_id: newStaffPick.staff_id });
+    setNewStaffPick({ staff_id: null, staff_name: '' });
     load();
   }
   async function removeStaff(id) { await supabase.from('matter_staff').delete().eq('id', id); load(); }
@@ -503,7 +509,7 @@ export default function MatterDetailPage() {
               <div className="detail-card"><span className="detail-label">Practice Group</span><span className="detail-value">{matter.practice_group || '—'}</span></div>
               <div className="detail-card">
                 <span className="detail-label">Assigned Staff</span>
-                <span className="detail-value">{staff.length === 0 ? '—' : staff.map((s) => s.staff_name).join(', ')}</span>
+                <span className="detail-value">{staff.length === 0 ? '—' : staff.map(staffDisplayName).join(', ')}</span>
               </div>
             </div>
 
@@ -545,10 +551,14 @@ export default function MatterDetailPage() {
               <label>Assigned Staff</label>
               <div className="chip-row">
                 {staff.length === 0 && <span className="muted">Nobody assigned yet.</span>}
-                {staff.map((s) => <span key={s.id} className="chip chip-removable">{s.staff_name}<button onClick={() => removeStaff(s.id)}>×</button></span>)}
+                {staff.map((s) => <span key={s.id} className="chip chip-removable">{staffDisplayName(s)}<button onClick={() => removeStaff(s.id)}>×</button></span>)}
               </div>
               <div className="inline-add-row">
-                <input type="text" placeholder="Staff name" value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} />
+                <StaffPicker
+                  value={newStaffPick.staff_id}
+                  valueName={newStaffPick.staff_name}
+                  onChange={(id, name) => setNewStaffPick({ staff_id: id, staff_name: name })}
+                />
                 <button className="btn-small" onClick={addStaff}>+ Add</button>
               </div>
             </div>
