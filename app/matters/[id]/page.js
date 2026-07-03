@@ -268,7 +268,9 @@ export default function MatterDetailPage() {
         {phone && <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{phone}</span>}
       </span>
     );
-  } return <div className="page"><p className="muted">Loading…</p></div>;
+  }
+
+  if (loading) return <div className="page"><p className="muted">Loading…</p></div>;
   if (error) return <div className="page"><div className="error-box">{error}</div></div>;
   if (!matter) return null;
 
