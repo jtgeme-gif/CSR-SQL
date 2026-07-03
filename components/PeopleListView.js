@@ -38,10 +38,6 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
     setModalPersonId(id);
     setModalEdit(false);
   }
-  function openEdit(id) {
-    setModalPersonId(id);
-    setModalEdit(true);
-  }
   async function handleDelete(p) {
     if (!confirm(`Delete ${p.first_name} ${p.last_name}? This can't be undone.`)) return;
     const { error } = await supabase.from('people').delete().eq('id', p.id);
@@ -95,13 +91,13 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
             {filtered.map((p) => (
               <tr key={p.id}>
                 <td><a className="row-link" onClick={() => openView(p.id)}>{p.first_name} {p.last_name}</a></td>
-                <td>{p.identity}</td>
+                <td>{p.magjudge ? 'Magistrate Judge' : p.identity}</td>
                 <td>{p.title || '—'}</td>
                 <td>{p.entities?.name || '—'}</td>
                 <td>{p.phone1 || '—'}</td>
                 <td>{p.email1 || '—'}</td>
                 <td className="row-actions">
-                  <button className="btn-small" onClick={() => openEdit(p.id)}>Edit</button>
+                  <button className="btn-small" onClick={() => openView(p.id)}>View</button>
                   <button className="btn-small btn-small-danger" onClick={() => handleDelete(p)}>Delete</button>
                 </td>
               </tr>
