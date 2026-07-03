@@ -83,18 +83,18 @@ export default function AppShell({ session, onSignOut, children }) {
 
             <div className="nav-section-label">Admin</div>
             <span className="nav-item disabled">Settings</span>
-          </nav>
 
-          <div className="sidebar-starred">
             <div className="nav-section-label">Starred Matters</div>
-            {starred.length === 0 && <div className="starred-empty">None yet</div>}
-            {starred.map((m) => (
-              <Link key={m.id} href={`/matters/${m.id}`} className="starred-item">
-                ★ {m.case_name}
-                {m.court_case_number ? ` ${m.court_case_number}` : ''}
-              </Link>
-            ))}
-          </div>
+            <div className="sidebar-starred">
+              {starred.length === 0 && <div className="starred-empty">None yet</div>}
+              {starred.map((m) => (
+                <Link key={m.id} href={`/matters/${m.id}`} className="starred-item">
+                  ★ {m.case_name}
+                  {m.court_case_number ? ` ${m.court_case_number}` : ''}
+                </Link>
+              ))}
+            </div>
+          </nav>
         </aside>
 
         <main className="shell-content">{children}</main>

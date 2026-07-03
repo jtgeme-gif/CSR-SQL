@@ -49,6 +49,7 @@ a:hover {
 .shell-body {
   display: flex;
   flex: 1;
+  align-items: flex-start;
 }
 .shell-content {
   flex: 1;
@@ -124,6 +125,10 @@ a:hover {
   flex-direction: column;
   gap: 24px;
   border-right: 2px solid var(--navy);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 .sidebar-logo {
   background: #fff;
@@ -177,9 +182,7 @@ a:hover {
   background: none;
 }
 .sidebar-starred {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,0.12);
+  padding-top: 4px;
 }
 .starred-item {
   display: block;
