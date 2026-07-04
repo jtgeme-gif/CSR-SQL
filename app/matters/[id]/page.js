@@ -452,6 +452,17 @@ export default function MatterDetailPage() {
     load();
   }
 
+  function locationLink(location) {
+    if (!location) return null;
+    const trimmed = location.trim();
+    const looksLikeMeetingLink = /^https?:\/\//i.test(trimmed) || /zoom\.us|teams\.microsoft\.com|meet\.google\.com/i.test(trimmed);
+    if (looksLikeMeetingLink) {
+      const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+      return href;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
+  }
+
   function renderEventRow(ev) {
     const label = ev.event_types?.label;
     const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
@@ -471,7 +482,7 @@ export default function MatterDetailPage() {
             <span className="badge badge-gray" style={{ fontSize: '10px', fontWeight: 400 }}>{label || '—'}</span>
           </div>
           {cfg.hasLocation && ev.location && (
-            <span className="muted" style={{ fontSize: '12px' }}>{ev.location}</span>
+            <a href={locationLink(ev.location)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px' }}>{ev.location}</a>
           )}
         </div>
         <div className="row-actions">
