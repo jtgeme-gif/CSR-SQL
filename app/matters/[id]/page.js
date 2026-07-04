@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { formatPhoneDisplay } from '../../../lib/formatPhone';
+import { formatDateSafe } from '../../../lib/formatDate';
 import EntityPicker from '../../../components/EntityPicker';
 import PersonPicker from '../../../components/PersonPicker';
 import StaffPicker from '../../../components/StaffPicker';
@@ -503,7 +504,7 @@ export default function MatterDetailPage() {
         <span onClick={() => toggleStar(ev)} style={{ cursor: 'pointer', opacity: ev.star_to_infobar ? 1 : 0.3, fontSize: '15px' }} title="Star to Info Bar">★</span>
         <input type="checkbox" checked={!!ev.completed} onChange={() => toggleComplete(ev)} title="Complete" style={{ marginTop: '3px' }} />
         <span className="muted" style={{ fontSize: '12px', minWidth: '120px', flexShrink: 0, paddingTop: '3px' }}>
-          {dates.map((d) => new Date(d).toLocaleDateString()).join(label === 'Trial' ? ' – ' : ' / ')}
+          {dates.map((d) => formatDateSafe(d)).join(label === 'Trial' ? ' – ' : ' / ')}
           {cfg.timed && ev.event_time ? ` @ ${formatTime12h(ev.event_time)}` : ''}
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '2px' }}>
@@ -616,7 +617,7 @@ export default function MatterDetailPage() {
     return (
       <div key={n.id} className="party-row" style={{ alignItems: 'flex-start' }}>
         <span className="muted" style={{ fontSize: '12px', minWidth: '100px', flexShrink: 0, paddingTop: '3px' }}>
-          {n.entry_date ? new Date(n.entry_date).toLocaleDateString() : '—'}
+          {n.entry_date ? formatDateSafe(n.entry_date) : '—'}
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '2px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -827,7 +828,7 @@ export default function MatterDetailPage() {
           {starredItems.length === 0 && <span className="muted">No starred dates yet</span>}
           {starredItems.map((ev) => (
             <span key={ev.id}>
-              ★ {ev.description || 'Date'} {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
+              ★ {ev.description || 'Date'} {ev.event_date ? formatDateSafe(ev.event_date) : '—'}
             </span>
           ))}
         </div>
@@ -875,7 +876,7 @@ export default function MatterDetailPage() {
                   ))}
                 </span>
               </div>
-              <div className="detail-card"><span className="detail-label">Date Opened</span><span className="detail-value">{matter.date_opened ? new Date(matter.date_opened).toLocaleDateString() : '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">Date Opened</span><span className="detail-value">{matter.date_opened ? formatDateSafe(matter.date_opened) : '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Practice Group</span><span className="detail-value">{matter.practice_group || '—'}</span></div>
               <div className="detail-card">
                 <span className="detail-label">Assigned Staff</span>
@@ -974,7 +975,7 @@ export default function MatterDetailPage() {
               <div key={ev.id} className="party-row">
                 <span>📌</span>
                 <span className="badge badge-red">
-                  {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
+                  {ev.event_date ? formatDateSafe(ev.event_date) : '—'}
                 </span>
                 <span style={{ fontWeight: 600 }}>{ev.description || 'Untitled'}</span>
               </div>
@@ -996,8 +997,8 @@ export default function MatterDetailPage() {
             <div className="detail-card"><span className="detail-label">Court Jurisdiction</span><span className="detail-value">{matter.court_jurisdiction || '—'}</span></div>
             <div className="detail-card"><span className="detail-label">Circuit/County/Division</span><span className="detail-value">{matter.circuit_county_division || '—'}</span></div>
             <div className="detail-card"><span className="detail-label">Case Number</span><span className="detail-value">{matter.court_case_number || '—'}</span></div>
-            <div className="detail-card"><span className="detail-label">Date Filed</span><span className="detail-value">{matter.date_filed ? new Date(matter.date_filed).toLocaleDateString() : '—'}</span></div>
-            <div className="detail-card"><span className="detail-label">Date Client Served</span><span className="detail-value">{matter.date_client_served ? new Date(matter.date_client_served).toLocaleDateString() : '—'}</span></div>
+            <div className="detail-card"><span className="detail-label">Date Filed</span><span className="detail-value">{matter.date_filed ? formatDateSafe(matter.date_filed) : '—'}</span></div>
+            <div className="detail-card"><span className="detail-label">Date Client Served</span><span className="detail-value">{matter.date_client_served ? formatDateSafe(matter.date_client_served) : '—'}</span></div>
           </div>
         )}
         {editingCourt && courtForm && (
@@ -1330,7 +1331,7 @@ export default function MatterDetailPage() {
                   <div className="detail-card">
                     <span className="detail-label">{cfg.dateLabels.join(' / ')}</span>
                     <span className="detail-value">
-                      {dates.map((d) => new Date(d).toLocaleDateString()).join(label === 'Trial' ? ' – ' : ' / ') || '—'}
+                      {dates.map((d) => formatDateSafe(d)).join(label === 'Trial' ? ' – ' : ' / ') || '—'}
                       {cfg.timed && ev.event_time ? ` @ ${formatTime12h(ev.event_time)}` : ''}
                     </span>
                   </div>

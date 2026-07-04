@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
+import { formatDateSafe } from '../lib/formatDate';
 
 const PRACTICE_GROUPS = ['Auto-Neg', 'Business', 'Police', 'Labor-Employment', 'Municipal', 'Zoning', 'School'];
 const CASE_STATUSES = ['Pre-litigation Monitoring', 'Active Litigation', 'Stayed', 'Closed', 'Appeal'];
@@ -146,7 +147,7 @@ export default function MattersPage() {
                   </span>
                 </td>
                 <td>{m.staffNames || '—'}</td>
-                <td>{m.date_opened ? new Date(m.date_opened).toLocaleDateString() : '—'}</td>
+                <td>{m.date_opened ? formatDateSafe(m.date_opened) : '—'}</td>
                 <td>
                   <span className={`pill ${m.case_status === 'Closed' ? 'pill-closed' : 'pill-active'}`}>
                     {m.case_status === 'Closed' ? 'Closed' : 'Active'}
