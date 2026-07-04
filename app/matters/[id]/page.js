@@ -455,6 +455,14 @@ export default function MatterDetailPage() {
     load();
   }
 
+  function formatTime12h(timeStr) {
+    if (!timeStr) return '';
+    const [h, m] = timeStr.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+  }
+
   function locationLink(location) {
     if (!location) return null;
     const trimmed = location.trim();
@@ -483,7 +491,7 @@ export default function MatterDetailPage() {
         <input type="checkbox" checked={!!ev.completed} onChange={() => toggleComplete(ev)} title="Complete" style={{ marginTop: '3px' }} />
         <span className="muted" style={{ fontSize: '12px', minWidth: '120px', flexShrink: 0, paddingTop: '3px' }}>
           {dates.map((d) => new Date(d).toLocaleDateString()).join(label === 'Trial' ? ' – ' : ' / ')}
-          {cfg.timed && ev.event_time ? ` @ ${ev.event_time}` : ''}
+          {cfg.timed && ev.event_time ? ` @ ${formatTime12h(ev.event_time)}` : ''}
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '2px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -1133,7 +1141,7 @@ export default function MatterDetailPage() {
                     <span className="detail-label">{cfg.dateLabels.join(' / ')}</span>
                     <span className="detail-value">
                       {dates.map((d) => new Date(d).toLocaleDateString()).join(label === 'Trial' ? ' – ' : ' / ') || '—'}
-                      {cfg.timed && ev.event_time ? ` @ ${ev.event_time}` : ''}
+                      {cfg.timed && ev.event_time ? ` @ ${formatTime12h(ev.event_time)}` : ''}
                     </span>
                   </div>
                   {cfg.hasLocation && (
