@@ -21,13 +21,13 @@ const FRAME_TYPES = {
   'Motions & Briefs': ['Motion / Brief'],
 };
 const EVENT_TYPE_CONFIG = {
-  'Court Deadline': { dateLabels: ['Date'], timed: false },
-  'Discovery': { dateLabels: ['Sent/Received', 'Response Due'], timed: false },
-  'Motion / Brief': { dateLabels: ['Filed', 'Response Due', 'Reply Due'], timed: false },
-  'Deposition': { dateLabels: ['Date'], timed: true },
-  'Hearing': { dateLabels: ['Date'], timed: true },
-  'Status Conference/Pre-Trial': { dateLabels: ['Date'], timed: true },
-  'Trial': { dateLabels: ['Date'], timed: true },
+  'Court Deadline': { dateLabels: ['Date'], timed: false, hasLocation: false },
+  'Discovery': { dateLabels: ['Sent/Received', 'Response Due'], timed: false, hasLocation: false },
+  'Motion / Brief': { dateLabels: ['Filed', 'Response Due', 'Reply Due'], timed: false, hasLocation: false },
+  'Deposition': { dateLabels: ['Date'], timed: true, hasLocation: true },
+  'Hearing': { dateLabels: ['Date'], timed: true, hasLocation: true },
+  'Status Conference/Pre-Trial': { dateLabels: ['Date'], timed: true, hasLocation: true },
+  'Trial': { dateLabels: ['Date'], timed: true, hasLocation: false },
 };
 const DATE_FIELDS = ['event_date', 'secondary_date', 'tertiary_date'];
 
@@ -50,7 +50,7 @@ export default function MatterDetailPage() {
   const [frameSort, setFrameSort] = useState({ 'Court Dates & Deadlines': 'date', 'Discovery & Depositions': 'date', 'Motions & Briefs': 'date' });
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '' });
+  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '' });
   const [savingEvent, setSavingEvent] = useState(false);
   const [multiModalOpen, setMultiModalOpen] = useState(false);
   const [multiRows, setMultiRows] = useState([{ title: '', date: '' }, { title: '', date: '' }]);
@@ -332,7 +332,7 @@ export default function MatterDetailPage() {
 
   function openAddEvent() {
     setEditingEventId(null);
-    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '' });
+    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '' });
     setEventModalOpen(true);
   }
 
@@ -346,6 +346,7 @@ export default function MatterDetailPage() {
       tertiary_date: ev.tertiary_date || '',
       event_time: ev.event_time || '',
       duration_minutes: ev.duration_minutes || '',
+      location: ev.location || '',
     });
     setEventModalOpen(true);
   }
@@ -354,7 +355,7 @@ export default function MatterDetailPage() {
     if (!eventForm.event_type_id) { alert('Pick an event type.'); return; }
     if (!eventForm.event_date) { alert('Pick a date.'); return; }
     const label = typeLabelFor(eventForm.event_type_id);
-    const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false };
+    const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
     setSavingEvent(true);
     const payload = {
       matter_id: matterId,
@@ -366,6 +367,7 @@ export default function MatterDetailPage() {
       all_day: cfg.timed ? !eventForm.event_time : true,
       event_time: cfg.timed && eventForm.event_time ? eventForm.event_time : null,
       duration_minutes: cfg.timed && eventForm.duration_minutes ? parseInt(eventForm.duration_minutes, 10) : null,
+      location: cfg.hasLocation ? (eventForm.location?.trim() || null) : null,
     };
     let error;
     if (editingEventId) {
@@ -452,19 +454,26 @@ export default function MatterDetailPage() {
 
   function renderEventRow(ev) {
     const label = ev.event_types?.label;
-    const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false };
+    const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
     const dates = DATE_FIELDS.slice(0, cfg.dateLabels.length).map((f) => ev[f]).filter(Boolean);
     return (
-      <div key={ev.id} className="party-row" style={{ opacity: ev.completed ? 0.55 : 1 }}>
+      <div key={ev.id} className="party-row" style={{ opacity: ev.completed ? 0.55 : 1, alignItems: 'flex-start' }}>
         <span onClick={() => togglePin(ev)} style={{ cursor: 'pointer', opacity: ev.pin_to_overview ? 1 : 0.3, fontSize: '15px' }} title="Pin to Overview Key Deadlines">📌</span>
         <span onClick={() => toggleStar(ev)} style={{ cursor: 'pointer', opacity: ev.star_to_infobar ? 1 : 0.3, fontSize: '15px' }} title="Star to Info Bar">★</span>
-        <input type="checkbox" checked={!!ev.completed} onChange={() => toggleComplete(ev)} title="Complete" />
-        <span className="badge badge-blue">{label || '—'}</span>
-        <span style={{ flex: 1 }}>{ev.description || '—'}</span>
-        <span className="muted" style={{ fontSize: '12px' }}>
-          {dates.map((d) => new Date(d).toLocaleDateString()).join(' / ')}
-          {cfg.timed && ev.event_time ? ` @ ${ev.event_time}` : ''}
-        </span>
+        <input type="checkbox" checked={!!ev.completed} onChange={() => toggleComplete(ev)} title="Complete" style={{ marginTop: '3px' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '14px', fontWeight: 600 }}>{ev.description || '—'}</span>
+            <span className="muted" style={{ fontSize: '12px' }}>
+              {dates.map((d) => new Date(d).toLocaleDateString()).join(' / ')}
+              {cfg.timed && ev.event_time ? ` @ ${ev.event_time}` : ''}
+            </span>
+            <span className="badge badge-gray" style={{ fontSize: '10px', fontWeight: 400 }}>{label || '—'}</span>
+          </div>
+          {cfg.hasLocation && ev.location && (
+            <span className="muted" style={{ fontSize: '12px' }}>{ev.location}</span>
+          )}
+        </div>
         <div className="row-actions">
           <button className="btn-small" onClick={() => openEditEvent(ev)}>Edit</button>
           <button className="btn-small btn-small-danger" onClick={() => removeEvent(ev.id)}>Remove</button>
@@ -665,7 +674,7 @@ export default function MatterDetailPage() {
           {starredItems.length === 0 && <span className="muted">No starred dates yet</span>}
           {starredItems.map((ev) => (
             <span key={ev.id}>
-              ★ {ev.event_types?.label || 'Date'} {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
+              ★ {ev.description || 'Date'} {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
             </span>
           ))}
         </div>
@@ -814,8 +823,7 @@ export default function MatterDetailPage() {
                 <span className="badge badge-red">
                   {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}
                 </span>
-                <span style={{ fontWeight: 600 }}>{ev.event_types?.label || 'Deadline'}</span>
-                {ev.description && <span className="muted">{ev.description}</span>}
+                <span style={{ fontWeight: 600 }}>{ev.description || 'Untitled'}</span>
               </div>
             ))}
           </div>
@@ -991,7 +999,7 @@ export default function MatterDetailPage() {
               </div>
               {(() => {
                 const label = typeLabelFor(eventForm.event_type_id);
-                const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false };
+                const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
                 return (
                   <>
                     <div className="form-row">
@@ -1012,6 +1020,16 @@ export default function MatterDetailPage() {
                           <label>Duration, minutes (optional)</label>
                           <input type="number" value={eventForm.duration_minutes} onChange={(e) => setEventForm((f) => ({ ...f, duration_minutes: e.target.value }))} />
                         </div>
+                      </div>
+                    )}
+                    {cfg.hasLocation && (
+                      <div className="form-field">
+                        <label>Location / Meeting Info</label>
+                        <input
+                          value={eventForm.location}
+                          onChange={(e) => setEventForm((f) => ({ ...f, location: e.target.value }))}
+                          placeholder="Address, Zoom link, or dial-in info"
+                        />
                       </div>
                     )}
                   </>
