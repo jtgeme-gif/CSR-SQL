@@ -23,11 +23,11 @@ const FRAME_TYPES = {
 const EVENT_TYPE_CONFIG = {
   'Court Deadline': { dateLabels: ['Date'], timed: false, hasLocation: false },
   'Discovery': { dateLabels: ['Sent/Received', 'Response Due'], timed: false, hasLocation: false },
-  'Motion / Brief': { dateLabels: ['Filed', 'Response Due', 'Reply Due'], timed: false, hasLocation: false },
+  'Motion / Brief': { dateLabels: ['Filed', 'Response Due (optional)', 'Reply Due (optional)'], timed: false, hasLocation: false },
   'Deposition': { dateLabels: ['Date'], timed: true, hasLocation: true },
   'Hearing': { dateLabels: ['Date'], timed: true, hasLocation: true },
   'Status Conference/Pre-Trial': { dateLabels: ['Date'], timed: true, hasLocation: true },
-  'Trial': { dateLabels: ['Date'], timed: true, hasLocation: false },
+  'Trial': { dateLabels: ['Start Date', 'End Date'], timed: true, hasLocation: true },
 };
 const DATE_FIELDS = ['event_date', 'secondary_date', 'tertiary_date'];
 
@@ -461,13 +461,13 @@ export default function MatterDetailPage() {
         <span onClick={() => togglePin(ev)} style={{ cursor: 'pointer', opacity: ev.pin_to_overview ? 1 : 0.3, fontSize: '15px' }} title="Pin to Overview Key Deadlines">📌</span>
         <span onClick={() => toggleStar(ev)} style={{ cursor: 'pointer', opacity: ev.star_to_infobar ? 1 : 0.3, fontSize: '15px' }} title="Star to Info Bar">★</span>
         <input type="checkbox" checked={!!ev.completed} onChange={() => toggleComplete(ev)} title="Complete" style={{ marginTop: '3px' }} />
+        <span className="muted" style={{ fontSize: '12px', minWidth: '120px', flexShrink: 0, paddingTop: '3px' }}>
+          {dates.map((d) => new Date(d).toLocaleDateString()).join(label === 'Trial' ? ' – ' : ' / ')}
+          {cfg.timed && ev.event_time ? ` @ ${ev.event_time}` : ''}
+        </span>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '2px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '14px', fontWeight: 600 }}>{ev.description || '—'}</span>
-            <span className="muted" style={{ fontSize: '12px' }}>
-              {dates.map((d) => new Date(d).toLocaleDateString()).join(' / ')}
-              {cfg.timed && ev.event_time ? ` @ ${ev.event_time}` : ''}
-            </span>
             <span className="badge badge-gray" style={{ fontSize: '10px', fontWeight: 400 }}>{label || '—'}</span>
           </div>
           {cfg.hasLocation && ev.location && (
