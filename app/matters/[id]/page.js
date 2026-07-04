@@ -50,7 +50,7 @@ export default function MatterDetailPage() {
   const [frameSort, setFrameSort] = useState({ 'Court Dates & Deadlines': 'date', 'Discovery & Depositions': 'date', 'Motions & Briefs': 'date' });
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '', notes: '' });
+  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '' });
   const [viewEventId, setViewEventId] = useState(null);
   const [savingEvent, setSavingEvent] = useState(false);
   const [multiModalOpen, setMultiModalOpen] = useState(false);
@@ -333,7 +333,7 @@ export default function MatterDetailPage() {
 
   function openAddEvent() {
     setEditingEventId(null);
-    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '', notes: '' });
+    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '' });
     setEventModalOpen(true);
   }
 
@@ -346,7 +346,7 @@ export default function MatterDetailPage() {
       secondary_date: ev.secondary_date || '',
       tertiary_date: ev.tertiary_date || '',
       event_time: ev.event_time || '',
-      duration_minutes: ev.duration_minutes || '',
+      duration_hours: ev.duration_minutes ? String(ev.duration_minutes / 60) : '',
       location: ev.location || '',
       notes: ev.notes || '',
     });
@@ -368,7 +368,7 @@ export default function MatterDetailPage() {
       tertiary_date: cfg.dateLabels.length >= 3 ? (eventForm.tertiary_date || null) : null,
       all_day: cfg.timed ? !eventForm.event_time : true,
       event_time: cfg.timed && eventForm.event_time ? eventForm.event_time : null,
-      duration_minutes: cfg.timed && eventForm.duration_minutes ? parseInt(eventForm.duration_minutes, 10) : null,
+      duration_minutes: cfg.timed && eventForm.duration_hours ? Math.round(parseFloat(eventForm.duration_hours) * 60) : null,
       location: cfg.hasLocation ? (eventForm.location?.trim() || null) : null,
       notes: eventForm.notes?.trim() || null,
     };
@@ -1044,8 +1044,14 @@ export default function MatterDetailPage() {
                           <input type="time" value={eventForm.event_time} onChange={(e) => setEventForm((f) => ({ ...f, event_time: e.target.value }))} />
                         </div>
                         <div className="form-field">
-                          <label>Duration, minutes (optional)</label>
-                          <input type="number" value={eventForm.duration_minutes} onChange={(e) => setEventForm((f) => ({ ...f, duration_minutes: e.target.value }))} />
+                          <label>Duration, hours (optional)</label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={eventForm.duration_hours}
+                            onChange={(e) => setEventForm((f) => ({ ...f, duration_hours: e.target.value }))}
+                            placeholder="e.g. 1.0, 1.5, 2.0"
+                          />
                         </div>
                       </div>
                     )}
