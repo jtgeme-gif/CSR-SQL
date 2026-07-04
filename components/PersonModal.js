@@ -238,7 +238,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
             </div>
             <div className="form-field">
               <label>Entity</label>
-              <EntityPicker value={form.entity_id} valueName={form.entity_name} onChange={handleEntityChange} allowCreate={false} />
+              <EntityPicker value={form.entity_id} valueName={form.entity_name} onChange={handleEntityChange} />
             </div>
             {form.identity === 'Judge' && (
               <div className="form-row">

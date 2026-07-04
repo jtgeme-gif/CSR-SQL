@@ -15,6 +15,7 @@ export default function EntitiesPage() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [showHidden, setShowHidden] = useState(false);
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
   const [creatingEntity, setCreatingEntity] = useState(false);
@@ -56,6 +57,7 @@ export default function EntitiesPage() {
   const filtered = entities.filter((e) => {
     if (!e.name?.toLowerCase().includes(search.toLowerCase())) return false;
     if (typeFilter !== 'all' && e.entity_type !== typeFilter) return false;
+    if (!showHidden && e.display_on_entity_list === false) return false;
     return true;
   });
 
@@ -75,6 +77,10 @@ export default function EntitiesPage() {
             <option value="all">All types</option>
             {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
+            Show hidden entities too
+          </label>
           <button className="btn btn-primary" onClick={() => setCreatingEntity(true)}>+ Add Entity</button>
         </div>
       </div>
@@ -100,6 +106,7 @@ export default function EntitiesPage() {
                   <span className={`entity-accordion-caret ${isOpen ? 'open' : ''}`}>▶</span>
                   <span className="entity-accordion-name">{e.name}</span>
                   {e.entity_type && <span className="badge badge-blue">{e.entity_type}</span>}
+                  {showHidden && e.display_on_entity_list === false && <span className="badge badge-gray">Hidden</span>}
                   <span className="entity-accordion-count">{people.length} {people.length === 1 ? 'person' : 'people'}</span>
                   <span className="entity-accordion-meta">{[e.city, e.state].filter(Boolean).join(', ')}</span>
                   <button

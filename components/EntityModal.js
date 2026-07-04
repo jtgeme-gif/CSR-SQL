@@ -6,7 +6,7 @@ import PhoneInput from './PhoneInput';
 import { formatPhoneDisplay } from '../lib/formatPhone';
 
 const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor'];
-const BLANK_FORM = { name: '', entity_type: '', address: '', city: '', state: '', zip: '', phone: '', email: '', website: '', notes: '' };
+const BLANK_FORM = { name: '', entity_type: '', address: '', city: '', state: '', zip: '', phone: '', email: '', website: '', notes: '', display_on_entity_list: true };
 
 // entityId === null/undefined => Create mode (blank form, opens straight into editing)
 export default function EntityModal({ entityId, startInEdit, onClose, onChanged }) {
@@ -43,6 +43,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
     return {
       name: form.name?.trim(),
       entity_type: form.entity_type || null,
+      display_on_entity_list: !!form.display_on_entity_list,
       address: form.address?.trim() || null,
       city: form.city?.trim() || null,
       state: form.state?.trim() || null,
@@ -103,6 +104,7 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
           <div className="modal-body">
             <div className="detail-grid">
               <div className="detail-card"><span className="detail-label">Entity Type</span><span className="detail-value">{entity.entity_type || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">Display on Entity List</span><span className="detail-value">{entity.display_on_entity_list ? 'Yes' : 'No'}</span></div>
               <div className="detail-card"><span className="detail-label">Address</span><span className="detail-value">{[entity.address, entity.city, entity.state, entity.zip].filter(Boolean).join(', ') || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Phone</span><span className="detail-value">{formatPhoneDisplay(entity.phone) || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Email</span><span className="detail-value">{entity.email || '—'}</span></div>
@@ -127,6 +129,10 @@ export default function EntityModal({ entityId, startInEdit, onClose, onChanged 
                 <option value="">— Unclassified —</option>
                 {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
+            </div>
+            <div className="form-checkbox">
+              <input type="checkbox" id="display-on-entity-list" checked={!!form.display_on_entity_list} onChange={(e) => update('display_on_entity_list', e.target.checked)} />
+              <label htmlFor="display-on-entity-list">Display on Entity List</label>
             </div>
             <div className="form-field"><label>Address</label><input value={form.address || ''} onChange={(e) => update('address', e.target.value)} /></div>
             <div className="form-row">
