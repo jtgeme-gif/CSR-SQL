@@ -50,7 +50,8 @@ export default function MatterDetailPage() {
   const [frameSort, setFrameSort] = useState({ 'Court Dates & Deadlines': 'date', 'Discovery & Depositions': 'date', 'Motions & Briefs': 'date' });
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '' });
+  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '', notes: '' });
+  const [viewEventId, setViewEventId] = useState(null);
   const [savingEvent, setSavingEvent] = useState(false);
   const [multiModalOpen, setMultiModalOpen] = useState(false);
   const [multiRows, setMultiRows] = useState([{ title: '', date: '' }, { title: '', date: '' }]);
@@ -332,7 +333,7 @@ export default function MatterDetailPage() {
 
   function openAddEvent() {
     setEditingEventId(null);
-    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '' });
+    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_minutes: '', location: '', notes: '' });
     setEventModalOpen(true);
   }
 
@@ -347,6 +348,7 @@ export default function MatterDetailPage() {
       event_time: ev.event_time || '',
       duration_minutes: ev.duration_minutes || '',
       location: ev.location || '',
+      notes: ev.notes || '',
     });
     setEventModalOpen(true);
   }
@@ -368,6 +370,7 @@ export default function MatterDetailPage() {
       event_time: cfg.timed && eventForm.event_time ? eventForm.event_time : null,
       duration_minutes: cfg.timed && eventForm.duration_minutes ? parseInt(eventForm.duration_minutes, 10) : null,
       location: cfg.hasLocation ? (eventForm.location?.trim() || null) : null,
+      notes: eventForm.notes?.trim() || null,
     };
     let error;
     if (editingEventId) {
@@ -463,6 +466,12 @@ export default function MatterDetailPage() {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
   }
 
+  function badgeClassForType(label) {
+    if (label === 'Deposition') return 'badge-blue';
+    if (label === 'Discovery') return 'badge-orange';
+    return 'badge-gray';
+  }
+
   function renderEventRow(ev) {
     const label = ev.event_types?.label;
     const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
@@ -479,7 +488,14 @@ export default function MatterDetailPage() {
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '2px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '14px', fontWeight: 600 }}>{ev.description || '—'}</span>
-            <span className="badge badge-gray" style={{ fontSize: '10px', fontWeight: 400 }}>{label || '—'}</span>
+            <span className={`badge ${badgeClassForType(label)}`} style={{ fontSize: '10px', fontWeight: 400 }}>{label || '—'}</span>
+            {ev.notes && (
+              <span className="muted" style={{ fontSize: '10px' }}>
+                {ev.notes.length > 100
+                  ? <a className="row-link" onClick={() => setViewEventId(ev.id)}>view record for notes</a>
+                  : ev.notes}
+              </span>
+            )}
           </div>
           {cfg.hasLocation && ev.location && (
             <a href={locationLink(ev.location)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px' }}>{ev.location}</a>
@@ -1046,6 +1062,16 @@ export default function MatterDetailPage() {
                   </>
                 );
               })()}
+              <div className="form-field">
+                <label>Notes (short reference, not a full record)</label>
+                <textarea
+                  rows={3}
+                  value={eventForm.notes}
+                  onChange={(e) => setEventForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. Contemplated motions in limine"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </div>
               <div className="modal-actions">
                 <button className="btn btn-primary" onClick={saveEvent} disabled={savingEvent}>{savingEvent ? 'Saving…' : editingEventId ? 'Save' : 'Add Event'}</button>
                 <button className="btn" onClick={() => setEventModalOpen(false)}>Cancel</button>
@@ -1080,6 +1106,52 @@ export default function MatterDetailPage() {
           </div>
         </div>
       )}
+
+      {viewEventId && (() => {
+        const ev = events.find((e) => e.id === viewEventId);
+        if (!ev) return null;
+        const label = ev.event_types?.label;
+        const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
+        const dates = DATE_FIELDS.slice(0, cfg.dateLabels.length).map((f) => ev[f]).filter(Boolean);
+        return (
+          <div className="modal-overlay" onClick={() => setViewEventId(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{ev.description || 'Event'}</h2>
+                <button className="modal-close" onClick={() => setViewEventId(null)}>×</button>
+              </div>
+              <div className="modal-body">
+                <div className="detail-grid">
+                  <div className="detail-card"><span className="detail-label">Type</span><span className="detail-value">{label || '—'}</span></div>
+                  <div className="detail-card">
+                    <span className="detail-label">{cfg.dateLabels.join(' / ')}</span>
+                    <span className="detail-value">
+                      {dates.map((d) => new Date(d).toLocaleDateString()).join(label === 'Trial' ? ' – ' : ' / ') || '—'}
+                      {cfg.timed && ev.event_time ? ` @ ${ev.event_time}` : ''}
+                    </span>
+                  </div>
+                  {cfg.hasLocation && (
+                    <div className="detail-card">
+                      <span className="detail-label">Location / Meeting Info</span>
+                      <span className="detail-value">
+                        {ev.location ? <a href={locationLink(ev.location)} target="_blank" rel="noopener noreferrer">{ev.location}</a> : '—'}
+                      </span>
+                    </div>
+                  )}
+                  <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
+                    <span className="detail-label">Notes</span>
+                    <span className="detail-value">{ev.notes || '—'}</span>
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button className="btn btn-primary" onClick={() => { setViewEventId(null); openEditEvent(ev); }}>Edit</button>
+                  <button className="btn" onClick={() => setViewEventId(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {partyModalRole && (
         <div className="modal-overlay" onClick={() => setPartyModalRole(null)}>
