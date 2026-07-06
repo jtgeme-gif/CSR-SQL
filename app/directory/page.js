@@ -11,7 +11,7 @@ export default function DirectoryPage() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [sortField, setSortField] = useState('name');
+  const [sortField, setSortField] = useState('lastName');
   const [sortDir, setSortDir] = useState('asc');
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
@@ -41,26 +41,26 @@ export default function DirectoryPage() {
       id: p.id,
       recordType: 'Person',
       name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || '(unnamed)',
-      identity: p.identity,
+      lastName: p.last_name || p.first_name || '',
       title: p.title,
       entityName: p.entities?.name || '',
-      city: p.city,
-      state: p.state,
       phone: p.phone1,
       email: p.email1,
+      isExpert: !!p.expert,
+      areaOfExpertise: p.expert ? (p.field_of_expertise || '') : '',
     }));
 
     const entityRows = (entities || []).map((e) => ({
       id: e.id,
       recordType: 'Entity',
       name: e.name,
-      identity: '',
+      lastName: e.name || '',
       title: '',
       entityName: '',
-      city: e.city,
-      state: e.state,
       phone: e.phone,
       email: e.email,
+      isExpert: e.entity_type === 'Expert',
+      areaOfExpertise: '',
     }));
 
     setRows([...peopleRows, ...entityRows]);
@@ -78,7 +78,11 @@ export default function DirectoryPage() {
 
   const filtered = useMemo(() => {
     let result = rows.filter((r) => {
-      if (typeFilter !== 'all' && r.recordType !== typeFilter) return false;
+      if (typeFilter === 'Expert') {
+        if (!r.isExpert) return false;
+      } else if (typeFilter !== 'all' && r.recordType !== typeFilter) {
+        return false;
+      }
       if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -121,6 +125,7 @@ export default function DirectoryPage() {
             <option value="all">All types</option>
             <option value="Person">People only</option>
             <option value="Entity">Entities only</option>
+            <option value="Expert">Experts</option>
           </select>
           <button className="btn btn-primary" onClick={() => setCreatingPerson(true)}>+ Add Person</button>
           <button className="btn btn-primary" onClick={() => setCreatingEntity(true)}>+ Add Entity</button>
@@ -138,27 +143,23 @@ export default function DirectoryPage() {
         <table className="table">
           <thead>
             <tr>
-              <th className="sortable" onClick={() => toggleSort('name')}>Name{sortArrow('name')}</th>
-              <th className="sortable" onClick={() => toggleSort('recordType')}>Type{sortArrow('recordType')}</th>
-              <th>Identity</th>
+              <th className="sortable" onClick={() => toggleSort('lastName')}>Name{sortArrow('lastName')}</th>
               <th>Title</th>
               <th>Entity</th>
-              <th className="sortable" onClick={() => toggleSort('city')}>City{sortArrow('city')}</th>
               <th>Phone</th>
               <th>Email</th>
+              <th>Area of Expertise</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((r) => (
               <tr key={`${r.recordType}-${r.id}`}>
                 <td><a className="row-link" onClick={() => handleRowClick(r)}>{r.name}</a></td>
-                <td><span className={`chip ${r.recordType === 'Entity' ? 'chip-entity' : ''}`}>{r.recordType}</span></td>
-                <td>{r.identity || '—'}</td>
                 <td>{r.title || '—'}</td>
                 <td>{r.entityName || '—'}</td>
-                <td>{r.city || '—'}</td>
                 <td>{r.phone || '—'}</td>
                 <td>{r.email || '—'}</td>
+                <td>{r.areaOfExpertise || (r.isExpert ? '—' : '')}</td>
               </tr>
             ))}
           </tbody>
