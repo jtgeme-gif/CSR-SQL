@@ -7,7 +7,7 @@ import EntityModal from '../../components/EntityModal';
 import { formatPhoneDisplay } from '../../lib/formatPhone';
 
 export default function EntitiesPage() {
-  const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor'];
+  const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor', 'Expert'];
   const [entities, setEntities] = useState([]);
   const [peopleByEntity, setPeopleByEntity] = useState({});
   const [expanded, setExpanded] = useState({});

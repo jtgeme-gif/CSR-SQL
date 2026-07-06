@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import PhoneInput from './PhoneInput';
 import { formatPhoneDisplay } from '../lib/formatPhone';
 
-const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor'];
+const ENTITY_TYPES = ['Client', 'Law Firm', 'Municipality', 'Vendor', 'Expert'];
 const BLANK_FORM = { name: '', entity_type: '', address: '', city: '', state: '', zip: '', phone: '', email: '', website: '', notes: '', display_on_entity_list: true };
 
 // entityId === null/undefined => Create mode (blank form, opens straight into editing)
