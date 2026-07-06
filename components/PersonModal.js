@@ -15,7 +15,7 @@ const BLANK_FORM = {
   address: '', city: '', state: '', zip: '',
   phone1: '', phone1_label: '', phone2: '', phone2_label: '',
   email1: '', email1_label: '', email2: '', email2_label: '',
-  website: '', mediator: false, field_of_expertise: '',
+  website: '', mediator: false, expert: false, field_of_expertise: '',
   court_level: '', court_jurisdiction: '', magjudge: false,
   notes: '',
 };
@@ -119,6 +119,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
       email2_label: form.email2_label?.trim() || null,
       website: form.website?.trim() || null,
       mediator: !!form.mediator,
+      expert: !!form.expert,
       field_of_expertise: form.field_of_expertise?.trim() || null,
       court_level: form.identity === 'Judge' ? (form.court_level?.trim() || null) : null,
       court_jurisdiction: form.identity === 'Judge' ? (form.court_jurisdiction?.trim() || null) : null,
@@ -192,6 +193,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
               <div className="detail-card"><span className="detail-label">Title</span><span className="detail-value">{person.title || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Entity</span><span className="detail-value">{person.entities?.name || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Mediator</span><span className="detail-value">{person.mediator ? 'Yes' : 'No'}</span></div>
+              <div className="detail-card"><span className="detail-label">Expert</span><span className="detail-value">{person.expert ? 'Yes' : 'No'}</span></div>
               <div className="detail-card"><span className="detail-label">{person.phone1_label || 'Phone 1'}</span><span className="detail-value">{formatPhoneDisplay(person.phone1) || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">{person.phone2_label || 'Phone 2'}</span><span className="detail-value">{formatPhoneDisplay(person.phone2) || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">{person.email1_label || 'Email 1'}</span><span className="detail-value">{person.email1 || '—'}</span></div>
@@ -286,6 +288,10 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
             <div className="form-checkbox">
               <input type="checkbox" id="edit-mediator" checked={!!form.mediator} onChange={(e) => update('mediator', e.target.checked)} />
               <label htmlFor="edit-mediator">Mediator</label>
+            </div>
+            <div className="form-checkbox">
+              <input type="checkbox" id="edit-expert" checked={!!form.expert} onChange={(e) => update('expert', e.target.checked)} />
+              <label htmlFor="edit-expert">Expert</label>
             </div>
             <div className="form-field"><label>Expertise if Expert / Other Information</label><input value={form.field_of_expertise || ''} onChange={(e) => update('field_of_expertise', e.target.value)} /></div>
             <div className="form-field"><label>Notes</label><input value={form.notes || ''} onChange={(e) => update('notes', e.target.value)} /></div>
