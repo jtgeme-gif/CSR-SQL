@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { formatDateSafe } from '../lib/formatDate';
 
 const FRAME_TYPES = {
-  'Court Dates & Deadlines': ['Hearing', 'Status Conference/Pre-Trial', 'Trial', 'Court Deadline'],
+  'Court Dates & Deadlines': ['Hearing', 'Status Conference/Pre-Trial', 'Trial', 'Court Deadline', 'Mediation'],
   'Discovery & Depositions': ['Discovery', 'Deposition'],
   'Motions & Briefs': ['Motion / Brief'],
 };
@@ -17,6 +17,7 @@ const EVENT_TYPE_CONFIG = {
   'Hearing': { dateLabels: ['Date'], timed: true, hasLocation: true },
   'Status Conference/Pre-Trial': { dateLabels: ['Date'], timed: true, hasLocation: true },
   'Trial': { dateLabels: ['Start Date', 'End Date'], timed: true, hasLocation: true },
+  'Mediation': { dateLabels: ['Date'], timed: true, hasLocation: true },
 };
 const DATE_FIELDS = ['event_date', 'secondary_date', 'tertiary_date'];
 
