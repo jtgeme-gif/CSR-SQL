@@ -64,6 +64,14 @@ export default function SchedulingTab({ matterId, onChanged }) {
     setEventModalOpen(true);
   }
 
+  function openAddDeposition() {
+    const depType = eventTypes.find((t) => t.label === 'Deposition');
+    if (!depType) { alert('Deposition event type not found — check the migration ran.'); return; }
+    setEditingEventId(null);
+    setEventForm({ event_type_id: depType.id, description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '', case_people_id: null, case_people_name: '' });
+    setEventModalOpen(true);
+  }
+
   function openEditEvent(ev) {
     setEditingEventId(ev.id);
     setEventForm({
@@ -262,6 +270,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
         <button className="btn btn-primary" onClick={openAddEvent}>+ Add Event</button>
         <button className="btn" onClick={() => setMultiModalOpen(true)}>+ Add Multiple</button>
+        <button className="btn" onClick={openAddDeposition}>+ Create Deposition</button>
       </div>
 
       {Object.keys(FRAME_TYPES).map((frame) => {
