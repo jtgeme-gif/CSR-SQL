@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { formatDateSafe } from '../lib/formatDate';
+import CasePartyPicker from './CasePartyPicker';
 
 const FRAME_TYPES = {
   'Court Dates & Deadlines': ['Hearing', 'Status Conference/Pre-Trial', 'Trial', 'Court Deadline', 'Mediation'],
@@ -32,7 +33,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
   const [frameSort, setFrameSort] = useState({ 'Court Dates & Deadlines': 'date', 'Discovery & Depositions': 'date', 'Motions & Briefs': 'date' });
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '' });
+  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '', case_people_id: null, case_people_name: '' });
   const [savingEvent, setSavingEvent] = useState(false);
   const [multiModalOpen, setMultiModalOpen] = useState(false);
   const [multiRows, setMultiRows] = useState([{ title: '', date: '' }, { title: '', date: '' }]);
@@ -46,7 +47,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
 
   async function load() {
     setLoading(true);
-    const { data: allEvents } = await supabase.from('events').select('*, event_types(id, label)').eq('matter_id', matterId).order('event_date');
+    const { data: allEvents } = await supabase.from('events').select('*, event_types(id, label), case_people(id, people(first_name, last_name))').eq('matter_id', matterId).order('event_date');
     setEvents(allEvents || []);
     const { data: etData } = await supabase.from('event_types').select('*').order('label');
     setEventTypes(etData || []);
@@ -59,7 +60,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
 
   function openAddEvent() {
     setEditingEventId(null);
-    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '' });
+    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '', case_people_id: null, case_people_name: '' });
     setEventModalOpen(true);
   }
 
@@ -75,6 +76,8 @@ export default function SchedulingTab({ matterId, onChanged }) {
       duration_hours: ev.duration_minutes ? String(ev.duration_minutes / 60) : '',
       location: ev.location || '',
       notes: ev.notes || '',
+      case_people_id: ev.case_people_id || null,
+      case_people_name: ev.case_people?.people ? `${ev.case_people.people.first_name || ''} ${ev.case_people.people.last_name || ''}`.trim() : '',
     });
     setEventModalOpen(true);
   }
@@ -84,11 +87,14 @@ export default function SchedulingTab({ matterId, onChanged }) {
     if (!eventForm.event_date) { alert('Pick a date.'); return; }
     const label = typeLabelFor(eventForm.event_type_id);
     const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
+    const isDeposition = label === 'Deposition';
     setSavingEvent(true);
     const payload = {
       matter_id: matterId,
       event_type_id: eventForm.event_type_id,
-      description: eventForm.description?.trim() || null,
+      description: isDeposition
+        ? (eventForm.case_people_name ? `Deposition of ${eventForm.case_people_name}` : 'Deposition')
+        : (eventForm.description?.trim() || null),
       event_date: eventForm.event_date,
       secondary_date: cfg.dateLabels.length >= 2 ? (eventForm.secondary_date || null) : null,
       tertiary_date: cfg.dateLabels.length >= 3 ? (eventForm.tertiary_date || null) : null,
@@ -97,6 +103,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
       duration_minutes: cfg.timed && eventForm.duration_hours ? Math.round(parseFloat(eventForm.duration_hours) * 60) : null,
       location: cfg.hasLocation ? (eventForm.location?.trim() || null) : null,
       notes: eventForm.notes?.trim() || null,
+      case_people_id: isDeposition ? (eventForm.case_people_id || null) : null,
     };
     let error;
     if (editingEventId) {
@@ -295,15 +302,28 @@ export default function SchedulingTab({ matterId, onChanged }) {
                   {eventTypes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
               </div>
-              <div className="form-field">
-                <label>Title / Description</label>
-                <input value={eventForm.description} onChange={(e) => setEventForm((f) => ({ ...f, description: e.target.value }))} placeholder="e.g. Hearing on Pl Motion to Compel" />
-              </div>
+              {typeLabelFor(eventForm.event_type_id) !== 'Deposition' && (
+                <div className="form-field">
+                  <label>Title / Description</label>
+                  <input value={eventForm.description} onChange={(e) => setEventForm((f) => ({ ...f, description: e.target.value }))} placeholder="e.g. Hearing on Pl Motion to Compel" />
+                </div>
+              )}
               {(() => {
                 const label = typeLabelFor(eventForm.event_type_id);
                 const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
                 return (
                   <>
+                    {label === 'Deposition' && (
+                      <div className="form-field">
+                        <label>Deponent</label>
+                        <CasePartyPicker
+                          matterId={matterId}
+                          value={eventForm.case_people_id}
+                          valueName={eventForm.case_people_name}
+                          onChange={(id, name) => setEventForm((f) => ({ ...f, case_people_id: id, case_people_name: name }))}
+                        />
+                      </div>
+                    )}
                     <div className="form-row">
                       {cfg.dateLabels.map((dl, i) => (
                         <div className="form-field" key={DATE_FIELDS[i]}>

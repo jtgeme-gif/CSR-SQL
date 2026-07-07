@@ -12,12 +12,13 @@ import StaffPicker from '../../../components/StaffPicker';
 import PersonModal from '../../../components/PersonModal';
 import EntityModal from '../../../components/EntityModal';
 import SchedulingTab from '../../../components/SchedulingTab';
+import WitnessesTab from '../../../components/WitnessesTab';
 import MediationTab from '../../../components/MediationTab';
 
 const PRACTICE_GROUPS = ['Auto-Neg', 'Business', 'Police', 'Labor-Employment', 'Municipal', 'Zoning', 'School'];
 const CASE_STATUSES = ['Pre-litigation Monitoring', 'Active Litigation', 'Stayed', 'Closed', 'Appeal'];
 const PARTY_ROLES = ['Plaintiff', 'Defendant', 'Co-Defendant'];
-const TABS = ['Overview', 'Case', 'Scheduling', 'Witnesses & Exhibits', 'Mediation / Settlement', 'Notes', 'Tasks', 'CSR', 'Subpoenas'];
+const TABS = ['Overview', 'Case', 'Scheduling', 'Witnesses', 'Mediation / Settlement', 'Notes', 'Tasks', 'CSR', 'Subpoenas'];
 
 export default function MatterDetailPage() {
   const params = useParams();
@@ -496,7 +497,7 @@ export default function MatterDetailPage() {
         {/* TAB ROW */}
         <div className="tab-row">
           {TABS.map((t) => {
-            const clickable = t === 'Overview' || t === 'Scheduling' || t === 'Mediation / Settlement';
+            const clickable = t === 'Overview' || t === 'Scheduling' || t === 'Mediation / Settlement' || t === 'Witnesses';
             return (
               <span
                 key={t}
@@ -763,6 +764,10 @@ export default function MatterDetailPage() {
 
       {activeTab === 'Mediation / Settlement' && (
         <MediationTab matterId={matterId} />
+      )}
+
+      {activeTab === 'Witnesses' && (
+        <WitnessesTab matterId={matterId} />
       )}
 
       {modalPersonId && <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />}
