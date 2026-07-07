@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import EntityPicker from './EntityPicker';
 import PhoneInput from './PhoneInput';
 import { formatPhoneDisplay } from '../lib/formatPhone';
+import { formatDateSafe } from '../lib/formatDate';
 
 const IDENTITIES = ['Individual', 'Attorney', 'Judge', 'Client Rep'];
 
@@ -32,6 +33,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
   const [historyRows, setHistoryRows] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(!isCreate);
   const [showHistory, setShowHistory] = useState(false);
+  const [depositionHistory, setDepositionHistory] = useState([]);
 
   useEffect(() => {
     if (!isCreate) { load(); loadHistory(); }
@@ -63,6 +65,22 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
       .map((r) => ({ ...r, repNames: repMap[r.id] || [] }))
       .sort((a, b) => new Date(b.matters?.created_at || 0) - new Date(a.matters?.created_at || 0));
     setHistoryRows(enriched);
+
+    let depositions = [];
+    if (partyIds.length > 0) {
+      const { data: depType } = await supabase.from('event_types').select('id').eq('label', 'Deposition').single();
+      if (depType?.id) {
+        const { data: depEvents } = await supabase
+          .from('events')
+          .select('*, matters(case_name)')
+          .eq('event_type_id', depType.id)
+          .in('case_people_id', partyIds)
+          .order('event_date', { ascending: false });
+        depositions = depEvents || [];
+      }
+    }
+    setDepositionHistory(depositions);
+
     setHistoryLoading(false);
   }
 
@@ -326,6 +344,22 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
                   </div>
                 </div>
               ))}
+
+              {!historyLoading && depositionHistory.length > 0 && (
+                <>
+                  <div style={{ fontWeight: 600, marginTop: '14px', marginBottom: '6px' }}>Depositions</div>
+                  {depositionHistory.map((ev) => (
+                    <div key={ev.id} className="party-row">
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600 }}>{ev.matters?.case_name || 'Unknown Matter'}</div>
+                        <div className="muted" style={{ fontSize: '12px' }}>
+                          {formatDateSafe(ev.event_date)} — {ev.completed ? 'Deposition taken' : 'Scheduled, not yet taken'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>

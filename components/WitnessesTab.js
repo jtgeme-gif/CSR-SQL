@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import PersonPicker from './PersonPicker';
 import EntityPicker from './EntityPicker';
+import PersonModal from './PersonModal';
+import { formatDateSafe } from '../lib/formatDate';
 
 const WITNESS_TYPES = ['Fact', 'Expert', 'Records', 'Reps', 'Other'];
 const PARTIES = ['Plaintiff', 'Defendant', 'Co-Defendant'];
@@ -22,6 +24,8 @@ export default function WitnessesTab({ matterId }) {
 
   const [editingId, setEditingId] = useState(null); // case_people.id currently being edited inline
   const [editForm, setEditForm] = useState({});
+  const [modalPersonId, setModalPersonId] = useState(null);
+  const [depositionsByWitness, setDepositionsByWitness] = useState({});
 
   function blankAddForm() {
     return {
@@ -41,7 +45,7 @@ export default function WitnessesTab({ matterId }) {
     setLoading(true);
     const { data: cpData } = await supabase
       .from('case_people')
-      .select('*, people(id, first_name, last_name, email1, phone1), poc_entity:poc_entity_id(id, name)')
+      .select('*, people(id, first_name, last_name, title, email1, phone1, entities(name)), poc_entity:poc_entity_id(id, name)')
       .eq('matter_id', matterId)
       .eq('role', 'Witness');
     setPersonWitnesses(cpData || []);
@@ -52,6 +56,29 @@ export default function WitnessesTab({ matterId }) {
       .eq('matter_id', matterId)
       .eq('role', 'Witness');
     setEntityWitnesses(ceData || []);
+
+    const cpIds = (cpData || []).map((p) => p.id);
+    if (cpIds.length > 0) {
+      const { data: depType } = await supabase.from('event_types').select('id').eq('label', 'Deposition').single();
+      if (depType?.id) {
+        const { data: depEvents } = await supabase
+          .from('events')
+          .select('*')
+          .eq('event_type_id', depType.id)
+          .in('case_people_id', cpIds)
+          .order('event_date');
+        const grouped = {};
+        (depEvents || []).forEach((ev) => {
+          if (!grouped[ev.case_people_id]) grouped[ev.case_people_id] = [];
+          grouped[ev.case_people_id].push(ev);
+        });
+        setDepositionsByWitness(grouped);
+      } else {
+        setDepositionsByWitness({});
+      }
+    } else {
+      setDepositionsByWitness({});
+    }
 
     setLoading(false);
   }
@@ -128,6 +155,7 @@ export default function WitnessesTab({ matterId }) {
       cv_received: p.cv_received || false,
       report_received: p.report_received || false,
       deposed: p.deposed || false,
+      notes: p.notes || '',
     });
   }
 
@@ -139,6 +167,7 @@ export default function WitnessesTab({ matterId }) {
       cv_received: editForm.witness_type === 'Expert' ? !!editForm.cv_received : null,
       report_received: editForm.witness_type === 'Expert' ? !!editForm.report_received : null,
       deposed: editForm.witness_type === 'Expert' ? !!editForm.deposed : null,
+      notes: editForm.notes?.trim() || null,
     };
     const { error } = await supabase.from('case_people').update(payload).eq('id', id);
     if (error) { alert(error.message); return; }
@@ -146,19 +175,45 @@ export default function WitnessesTab({ matterId }) {
     load();
   }
 
+  async function toggleDepositionComplete(ev) {
+    const { error } = await supabase.from('events').update({ completed: !ev.completed }).eq('id', ev.id);
+    if (error) { alert(error.message); return; }
+    load();
+  }
+
   function renderPersonCard(p) {
     const name = `${p.people?.first_name || ''} ${p.people?.last_name || ''}`.trim();
+    const title = p.people?.title;
+    const entityName = p.people?.entities?.name;
+    const depositions = depositionsByWitness[p.id] || [];
     return (
       <div key={p.id} className="party-card">
         <div className="party-card-header">
-          <span style={{ fontWeight: 600 }}>{name}</span>
+          <a className="row-link" style={{ fontWeight: 600 }} onClick={() => setModalPersonId(p.person_id)}>{name}</a>
           <span className="badge badge-blue">{p.witness_type || '—'}</span>
           {p.party && <span className="badge badge-gray">{p.party}</span>}
           <button className="btn-small btn-small-danger" onClick={() => removePersonWitness(p.id)}>Remove</button>
         </div>
 
+        {(title || entityName) && (
+          <div className="muted" style={{ fontSize: '12px', marginTop: '2px' }}>
+            {[title, entityName].filter(Boolean).join(' — ')}
+          </div>
+        )}
+
+        {depositions.length > 0 && (
+          <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {depositions.map((ev) => (
+              <label key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!ev.completed} onChange={() => toggleDepositionComplete(ev)} />
+                {ev.completed ? '✓ Deposition taken' : 'Deposition scheduled'} — {formatDateSafe(ev.event_date)}
+              </label>
+            ))}
+          </div>
+        )}
+
         {editingId === p.id ? (
-          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '320px' }}>
+          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '360px' }}>
             <div className="form-row">
               <div className="form-field">
                 <label>Witness Type</label>
@@ -181,6 +236,15 @@ export default function WitnessesTab({ matterId }) {
                 <div className="form-checkbox"><input type="checkbox" id={`dep-${p.id}`} checked={!!editForm.deposed} onChange={(e) => setEditForm((f) => ({ ...f, deposed: e.target.checked }))} /><label htmlFor={`dep-${p.id}`}>Deposed</label></div>
               </div>
             )}
+            <div className="form-field">
+              <label>Notes</label>
+              <textarea
+                rows={3}
+                value={editForm.notes}
+                onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
+              />
+            </div>
             <div className="modal-actions">
               <button className="btn-small btn-primary" onClick={() => saveEdit(p.id)}>Save</button>
               <button className="btn-small" onClick={() => setEditingId(null)}>Cancel</button>
@@ -193,6 +257,7 @@ export default function WitnessesTab({ matterId }) {
                 Disclosed: {p.disclosed ? 'Yes' : 'No'} · CV: {p.cv_received ? 'Yes' : 'No'} · Report: {p.report_received ? 'Yes' : 'No'} · Deposed: {p.deposed ? 'Yes' : 'No'}
               </div>
             )}
+            {p.notes && <div className="muted" style={{ fontSize: '12px', marginTop: '4px', whiteSpace: 'pre-wrap' }}>{p.notes}</div>}
             <div className="muted" style={{ fontSize: '11px', marginTop: '4px', cursor: 'pointer' }} onClick={() => startEdit(p)}>Edit</div>
           </>
         )}
@@ -340,6 +405,10 @@ export default function WitnessesTab({ matterId }) {
             </div>
           </div>
         </div>
+      )}
+
+      {modalPersonId && (
+        <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />
       )}
     </>
   );
