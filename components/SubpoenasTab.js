@@ -29,6 +29,7 @@ export default function SubpoenasTab({ matterId }) {
   const [requests, setRequests] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [viewId, setViewId] = useState(null);
   const [form, setForm] = useState(blankForm());
   const [saving, setSaving] = useState(false);
 
@@ -147,7 +148,7 @@ export default function SubpoenasTab({ matterId }) {
             <tbody>
               {requests.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.target}</td>
+                  <td><a className="row-link" onClick={() => setViewId(r.id)}>{r.target}</a></td>
                   <td>{r.request_type || '—'}</td>
                   <td>{r.subpoena_methods?.label || '—'}</td>
                   <td>{r.date_submitted ? formatDateSafe(r.date_submitted) : '—'}</td>
@@ -164,6 +165,43 @@ export default function SubpoenasTab({ matterId }) {
           </table>
         )}
       </div>
+
+      {viewId && (() => {
+        const r = requests.find((req) => req.id === viewId);
+        if (!r) return null;
+        return (
+          <div className="modal-overlay" onClick={() => setViewId(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{r.target}</h2>
+                <button className="modal-close" onClick={() => setViewId(null)}>×</button>
+              </div>
+              <div className="modal-body">
+                <div className="detail-grid">
+                  <div className="detail-card"><span className="detail-label">Type</span><span className="detail-value">{r.request_type || '—'}</span></div>
+                  <div className="detail-card"><span className="detail-label">Method</span><span className="detail-value">{r.subpoena_methods?.label || '—'}</span></div>
+                  <div className="detail-card"><span className="detail-label">Status</span><span className="detail-value">{r.status}</span></div>
+                  <div className="detail-card"><span className="detail-label">Date Submitted</span><span className="detail-value">{r.date_submitted ? formatDateSafe(r.date_submitted) : '—'}</span></div>
+                  <div className="detail-card"><span className="detail-label">Date Due</span><span className="detail-value">{r.date_due ? formatDateSafe(r.date_due) : '—'}</span></div>
+                  <div className="detail-card"><span className="detail-label">Date Received</span><span className="detail-value">{r.date_received ? formatDateSafe(r.date_received) : '—'}</span></div>
+                  <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
+                    <span className="detail-label">Request Content</span>
+                    <span className="detail-value">{r.request_content || '—'}</span>
+                  </div>
+                  <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
+                    <span className="detail-label">Notes</span>
+                    <span className="detail-value">{r.notes || '—'}</span>
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button className="btn btn-primary" onClick={() => { setViewId(null); openEdit(r); }}>Edit</button>
+                  <button className="btn" onClick={() => setViewId(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {modalOpen && (
         <div className="modal-overlay" onClick={() => setModalOpen(false)}>
