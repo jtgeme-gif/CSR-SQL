@@ -13,6 +13,7 @@ import PersonModal from '../../../components/PersonModal';
 import EntityModal from '../../../components/EntityModal';
 import SchedulingTab from '../../../components/SchedulingTab';
 import WitnessesTab from '../../../components/WitnessesTab';
+import SubpoenasTab from '../../../components/SubpoenasTab';
 import MediationTab from '../../../components/MediationTab';
 
 const PRACTICE_GROUPS = ['Auto-Neg', 'Business', 'Police', 'Labor-Employment', 'Municipal', 'Zoning', 'School'];
@@ -497,7 +498,7 @@ export default function MatterDetailPage() {
         {/* TAB ROW */}
         <div className="tab-row">
           {TABS.map((t) => {
-            const clickable = t === 'Overview' || t === 'Scheduling' || t === 'Mediation / Settlement' || t === 'Witnesses';
+            const clickable = t === 'Overview' || t === 'Scheduling' || t === 'Mediation / Settlement' || t === 'Witnesses' || t === 'Subpoenas';
             return (
               <span
                 key={t}
@@ -768,6 +769,10 @@ export default function MatterDetailPage() {
 
       {activeTab === 'Witnesses' && (
         <WitnessesTab matterId={matterId} />
+      )}
+
+      {activeTab === 'Subpoenas' && (
+        <SubpoenasTab matterId={matterId} />
       )}
 
       {modalPersonId && <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />}
