@@ -393,9 +393,9 @@ export default function MatterDetailPage() {
                     <button className="btn-small" onClick={() => setEditingDismissedFor(null)}>Cancel</button>
                   </div>
                 ) : (
-                  <div className="muted" style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }} onClick={() => startEditDismissed(ce.id, 'entity', ce)}>
+                  <button className="btn-small" style={{ marginTop: '4px' }} onClick={() => startEditDismissed(ce.id, 'entity', ce)}>
                     {ce.dismissed ? 'Edit Dismissal' : 'Not Active in Case'}
-                  </div>
+                  </button>
                 )
               )}
 
@@ -505,9 +505,9 @@ export default function MatterDetailPage() {
                     <button className="btn-small" onClick={() => setEditingDismissedFor(null)}>Cancel</button>
                   </div>
                 ) : (
-                  <div className="muted" style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }} onClick={() => startEditDismissed(cp.id, 'person', cp)}>
+                  <button className="btn-small" style={{ marginTop: '4px' }} onClick={() => startEditDismissed(cp.id, 'person', cp)}>
                     {cp.dismissed ? 'Edit Dismissal' : 'Not Active in Case'}
-                  </div>
+                  </button>
                 )
               )}
 
