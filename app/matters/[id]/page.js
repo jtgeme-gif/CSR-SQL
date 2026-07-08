@@ -60,6 +60,9 @@ export default function MatterDetailPage() {
   const [openPopover, setOpenPopover] = useState(null);
   const [editingCapacityFor, setEditingCapacityFor] = useState(null);
   const [capacityDraft, setCapacityDraft] = useState('');
+  const [editingGroup, setEditingGroup] = useState({});
+  const [editingDismissedFor, setEditingDismissedFor] = useState(null);
+  const [dismissedDraft, setDismissedDraft] = useState({ dismissed: false, note: '' });
 
   const [modalPersonId, setModalPersonId] = useState(null);
   const [modalEntityId, setModalEntityId] = useState(null);
@@ -283,15 +286,36 @@ export default function MatterDetailPage() {
     return `mailto:${email}?subject=${encodeURIComponent(matter?.case_name || '')}`;
   }
 
+  function toggleGroupEdit(role) {
+    setEditingGroup((g) => ({ ...g, [role]: !g[role] }));
+  }
+
+  function startEditDismissed(id, type, current) {
+    setEditingDismissedFor({ id, type });
+    setDismissedDraft({ dismissed: !!current.dismissed, note: current.dismissal_note || '' });
+  }
+
+  async function saveDismissed() {
+    const { id, type } = editingDismissedFor;
+    const table = type === 'entity' ? 'case_entities' : 'case_people';
+    const { error } = await supabase.from(table).update({
+      dismissed: dismissedDraft.dismissed,
+      dismissal_note: dismissedDraft.dismissed ? (dismissedDraft.note?.trim() || null) : null,
+    }).eq('id', id);
+    if (error) { alert(error.message); return; }
+    setEditingDismissedFor(null);
+    load();
+  }
+
   function renderPersonChip(cp, onRemove) {
     const name = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim();
     const href = mailtoHref(cp.people?.email1);
     const phone = formatPhoneDisplay(cp.people?.phone1);
     return (
       <span key={cp.id} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
-        <span className="chip chip-removable">
+        <span className={onRemove ? 'chip chip-removable' : 'chip'}>
           {href ? <a href={href}>{name}</a> : <span>{name}</span>}
-          <button onClick={onRemove}>×</button>
+          {onRemove && <button onClick={onRemove}>×</button>}
         </span>
         {phone && <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{phone}</span>}
       </span>
@@ -312,14 +336,21 @@ export default function MatterDetailPage() {
 
   function renderPartyGroup(role) {
     const { entities, people } = partiesForRole(role);
+    const isEditing = !!editingGroup[role];
 
     return (
       <div className="party-group" key={role}>
         <div className="party-group-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>{role}s</span>
-          <button className="btn-small" onClick={() => openAddParty(role)}>+ Add {role}</button>
+          <button className="btn-small" onClick={() => toggleGroupEdit(role)}>{isEditing ? 'Done' : 'Edit'}</button>
         </div>
         {entities.length === 0 && people.length === 0 && <p className="muted" style={{ margin: '4px 0 10px' }}>None yet.</p>}
+
+        {isEditing && (
+          <div style={{ marginBottom: '10px' }}>
+            <button className="btn-small" onClick={() => openAddParty(role)}>+ Add {role}</button>
+          </div>
+        )}
 
         {entities.map((ce) => {
           const pocKey = nestedKey('poc', ce.id);
@@ -328,50 +359,85 @@ export default function MatterDetailPage() {
           const attyKey = nestedKey('atty-entity', ce.id);
           const attyForm = nestedFormFor(attyKey);
           const attys = casePeople.filter((cp) => cp.role === 'Attorney' && cp.represents_case_entity_id === ce.id);
+          const isDismissedEditing = editingDismissedFor?.id === ce.id && editingDismissedFor?.type === 'entity';
 
           return (
-            <div key={ce.id} className="party-card">
+            <div key={ce.id} className="party-card" style={{ opacity: ce.dismissed ? 0.6 : 1 }}>
               <div className="party-card-header">
                 <a className="row-link" onClick={() => setModalEntityId(ce.entities?.id)}>{ce.entities?.name}</a>
                 <span className="badge badge-blue">Entity</span>
-                <button className="btn-small btn-small-danger" onClick={() => removeEntityParty(ce.id)}>Remove</button>
+                {ce.dismissed && <span className="badge badge-red">Dismissed</span>}
+                {isEditing && <button className="btn-small btn-small-danger" onClick={() => removeEntityParty(ce.id)}>Remove</button>}
               </div>
+
+              {ce.dismissed && ce.dismissal_note && !isDismissedEditing && (
+                <div className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>{ce.dismissal_note}</div>
+              )}
+
+              {isEditing && (
+                isDismissedEditing ? (
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                      <input type="checkbox" checked={dismissedDraft.dismissed} onChange={(e) => setDismissedDraft((d) => ({ ...d, dismissed: e.target.checked }))} />
+                      Not Active in Case
+                    </label>
+                    {dismissedDraft.dismissed && (
+                      <input
+                        style={{ flex: 1, minWidth: '160px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
+                        placeholder="e.g. dismissed by stipulation, settled"
+                        value={dismissedDraft.note}
+                        onChange={(e) => setDismissedDraft((d) => ({ ...d, note: e.target.value }))}
+                      />
+                    )}
+                    <button className="btn-small btn-primary" onClick={saveDismissed}>Save</button>
+                    <button className="btn-small" onClick={() => setEditingDismissedFor(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div className="muted" style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }} onClick={() => startEditDismissed(ce.id, 'entity', ce)}>
+                    {ce.dismissed ? 'Edit Dismissal' : 'Not Active in Case'}
+                  </div>
+                )
+              )}
 
               {role === 'Defendant' && (
                 <div className="nested-block">
                   <span className="nested-label">POC(s):</span>
-                  {pocs.map((p) => renderPersonChip(p, () => removeCasePerson(p.id)))}
-                  <span style={{ position: 'relative' }}>
-                    <button className="btn-small" onClick={() => togglePopover(pocKey)}>+ Add POC</button>
-                    {openPopover === pocKey && (
-                      <div className="popover">
-                        <PersonPicker value={pocForm.person_id} valueName={pocForm.person_name} onChange={(id, name) => updateNestedForm(pocKey, { person_id: id, person_name: name })} />
-                        <div className="modal-actions" style={{ marginTop: '8px' }}>
-                          <button className="btn-small btn-primary" onClick={() => addPOC(ce.id, ce.entities?.id)}>Add</button>
-                          <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                  {pocs.map((p) => renderPersonChip(p, isEditing ? () => removeCasePerson(p.id) : undefined))}
+                  {isEditing && (
+                    <span style={{ position: 'relative' }}>
+                      <button className="btn-small" onClick={() => togglePopover(pocKey)}>+ Add POC</button>
+                      {openPopover === pocKey && (
+                        <div className="popover">
+                          <PersonPicker value={pocForm.person_id} valueName={pocForm.person_name} onChange={(id, name) => updateNestedForm(pocKey, { person_id: id, person_name: name })} />
+                          <div className="modal-actions" style={{ marginTop: '8px' }}>
+                            <button className="btn-small btn-primary" onClick={() => addPOC(ce.id, ce.entities?.id)}>Add</button>
+                            <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </span>
+                      )}
+                    </span>
+                  )}
                 </div>
               )}
 
               {(role === 'Plaintiff' || role === 'Co-Defendant') && (
                 <div className="nested-block">
                   <span className="nested-label">Attorney(s):</span>
-                  {attys.map((a) => renderPersonChip(a, () => removeCasePerson(a.id)))}
-                  <span style={{ position: 'relative' }}>
-                    <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
-                    {openPopover === attyKey && (
-                      <div className="popover">
-                        <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
-                        <div className="modal-actions" style={{ marginTop: '8px' }}>
-                          <button className="btn-small btn-primary" onClick={() => addAttorney('entity', ce.id)}>Add</button>
-                          <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                  {attys.map((a) => renderPersonChip(a, isEditing ? () => removeCasePerson(a.id) : undefined))}
+                  {isEditing && (
+                    <span style={{ position: 'relative' }}>
+                      <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
+                      {openPopover === attyKey && (
+                        <div className="popover">
+                          <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                          <div className="modal-actions" style={{ marginTop: '8px' }}>
+                            <button className="btn-small btn-primary" onClick={() => addAttorney('entity', ce.id)}>Add</button>
+                            <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </span>
+                      )}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -384,14 +450,20 @@ export default function MatterDetailPage() {
           const attys = casePeople.filter((c) => c.role === 'Attorney' && c.represents_case_person_id === cp.id);
           const displayName = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim() + (cp.capacity ? ` ${cp.capacity}` : '') + (cp.pro_se ? ' — Pro Se' : '');
           const partyContactAddress = [cp.people?.address, cp.people?.city, cp.people?.state, cp.people?.zip].filter(Boolean).join(', ');
+          const isDismissedEditing = editingDismissedFor?.id === cp.id && editingDismissedFor?.type === 'person';
 
           return (
-            <div key={cp.id} className="party-card">
+            <div key={cp.id} className="party-card" style={{ opacity: cp.dismissed ? 0.6 : 1 }}>
               <div className="party-card-header">
                 <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{displayName}</a>
                 <span className="badge badge-gray">Person</span>
-                <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>
+                {cp.dismissed && <span className="badge badge-red">Dismissed</span>}
+                {isEditing && <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>}
               </div>
+
+              {cp.dismissed && cp.dismissal_note && !isDismissedEditing && (
+                <div className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>{cp.dismissal_note}</div>
+              )}
 
               {editingCapacityFor === cp.id ? (
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
@@ -414,6 +486,31 @@ export default function MatterDetailPage() {
                 </div>
               )}
 
+              {isEditing && (
+                isDismissedEditing ? (
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                      <input type="checkbox" checked={dismissedDraft.dismissed} onChange={(e) => setDismissedDraft((d) => ({ ...d, dismissed: e.target.checked }))} />
+                      Not Active in Case
+                    </label>
+                    {dismissedDraft.dismissed && (
+                      <input
+                        style={{ flex: 1, minWidth: '160px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
+                        placeholder="e.g. dismissed by stipulation, settled"
+                        value={dismissedDraft.note}
+                        onChange={(e) => setDismissedDraft((d) => ({ ...d, note: e.target.value }))}
+                      />
+                    )}
+                    <button className="btn-small btn-primary" onClick={saveDismissed}>Save</button>
+                    <button className="btn-small" onClick={() => setEditingDismissedFor(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div className="muted" style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }} onClick={() => startEditDismissed(cp.id, 'person', cp)}>
+                    {cp.dismissed ? 'Edit Dismissal' : 'Not Active in Case'}
+                  </div>
+                )
+              )}
+
               {role === 'Defendant' && (
                 <div className="nested-block">
                   <span className="nested-label">Contact:</span>
@@ -425,7 +522,7 @@ export default function MatterDetailPage() {
                 </div>
               )}
 
-              {(role === 'Plaintiff' || role === 'Co-Defendant') && (
+              {(role === 'Plaintiff' || role === 'Co-Defendant') && isEditing && (
                 <div className="form-checkbox" style={{ marginTop: '4px', marginBottom: 0 }}>
                   <input type="checkbox" id={`prose-${cp.id}`} checked={!!cp.pro_se} onChange={() => togglePartyProSe(cp)} />
                   <label htmlFor={`prose-${cp.id}`} style={{ fontSize: '11px' }}>Pro Se (no attorney)</label>
@@ -446,19 +543,21 @@ export default function MatterDetailPage() {
                 ) : (
                   <div className="nested-block">
                     <span className="nested-label">Attorney(s):</span>
-                    {attys.map((a) => renderPersonChip(a, () => removeCasePerson(a.id)))}
-                    <span style={{ position: 'relative' }}>
-                      <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
-                      {openPopover === attyKey && (
-                        <div className="popover">
-                          <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
-                          <div className="modal-actions" style={{ marginTop: '8px' }}>
-                            <button className="btn-small btn-primary" onClick={() => addAttorney('person', cp.id)}>Add</button>
-                            <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                    {attys.map((a) => renderPersonChip(a, isEditing ? () => removeCasePerson(a.id) : undefined))}
+                    {isEditing && (
+                      <span style={{ position: 'relative' }}>
+                        <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
+                        {openPopover === attyKey && (
+                          <div className="popover">
+                            <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                            <div className="modal-actions" style={{ marginTop: '8px' }}>
+                              <button className="btn-small btn-primary" onClick={() => addAttorney('person', cp.id)}>Add</button>
+                              <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </span>
+                        )}
+                      </span>
+                    )}
                   </div>
                 )
               )}
