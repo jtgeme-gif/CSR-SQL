@@ -47,19 +47,6 @@ export default function MattersPage() {
 
     const matterIds = (mattersData || []).map((m) => m.id);
 
-    // Client insurer names, keyed by matter
-    const insurerIds = (mattersData || [])
-      .map((m) => m.client_insurer_entity_id)
-      .filter(Boolean);
-    let entitiesById = {};
-    if (insurerIds.length > 0) {
-      const { data: entities } = await supabase
-        .from('entities')
-        .select('id, name')
-        .in('id', insurerIds);
-      entitiesById = Object.fromEntries((entities || []).map((e) => [e.id, e.name]));
-    }
-
     // Assigned staff (internal "Attorney" column), keyed by matter
     let staffByMatter = {};
     if (matterIds.length > 0) {
@@ -77,7 +64,6 @@ export default function MattersPage() {
 
     const enriched = (mattersData || []).map((m) => ({
       ...m,
-      clientName: m.client_insurer_entity_id ? entitiesById[m.client_insurer_entity_id] : null,
       staffNames: staffByMatter[m.id] || null,
     }));
 
@@ -85,13 +71,38 @@ export default function MattersPage() {
     setLoading(false);
   }
 
+  const [sortField, setSortField] = useState('case_name');
+  const [sortDir, setSortDir] = useState('asc');
+
+  function toggleSort(field) {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  }
+
+  function sortArrow(field) {
+    if (sortField !== field) return '';
+    return sortDir === 'asc' ? ' ▲' : ' ▼';
+  }
+
   const filtered = useMemo(() => {
-    return matters.filter((m) => {
+    let result = matters.filter((m) => {
       if (groupFilter !== 'all' && m.practice_group !== groupFilter) return false;
       if (statusFilter !== 'all' && m.case_status !== statusFilter) return false;
       return true;
     });
-  }, [matters, groupFilter, statusFilter]);
+    result.sort((a, b) => {
+      const av = (a[sortField] || '').toString().toLowerCase();
+      const bv = (b[sortField] || '').toString().toLowerCase();
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return result;
+  }, [matters, groupFilter, statusFilter, sortField, sortDir]);
 
   return (
     <div className="page">
@@ -126,8 +137,8 @@ export default function MattersPage() {
         <table className="table">
           <thead>
             <tr>
-              <th>Case Name</th>
-              <th>Client</th>
+              <th className="sortable" onClick={() => toggleSort('case_name')}>Case Name{sortArrow('case_name')}</th>
+              <th className="sortable" onClick={() => toggleSort('file_number')}>Our File #{sortArrow('file_number')}</th>
               <th>Practice Group</th>
               <th>Status</th>
               <th>Attorney</th>
@@ -139,7 +150,7 @@ export default function MattersPage() {
             {filtered.map((m) => (
               <tr key={m.id}>
                 <td><Link href={`/matters/${m.id}`}>{m.case_name}</Link></td>
-                <td>{m.clientName ? <span className="chip">{m.clientName}</span> : '—'}</td>
+                <td>{m.file_number || '—'}</td>
                 <td>{m.practice_group || '—'}</td>
                 <td>
                   <span className={`badge badge-${statusColor(m.case_status)}`}>
