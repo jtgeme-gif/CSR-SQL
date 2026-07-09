@@ -331,7 +331,7 @@ export default function CaseTab({ matterId }) {
 
       {countModalOpen && (
         <div className="modal-overlay" onClick={() => setCountModalOpen(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '760px' }}>
             <div className="modal-header">
               <h2>{editingCountId ? 'Edit Count' : 'Add Count'}</h2>
               <button className="modal-close" onClick={() => setCountModalOpen(false)}>×</button>
@@ -351,11 +351,11 @@ export default function CaseTab({ matterId }) {
               <div className="form-field">
                 <label>Applies to</label>
                 {defendants.length === 0 && <p className="muted">No Defendants/Co-Defendants on this matter yet.</p>}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '6px 12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px 16px' }}>
                   {[...defendants].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
                     <label
                       key={`${d.type}-${d.id}`}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '6px', fontSize: '13px', whiteSpace: 'nowrap' }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '6px', fontSize: '13px', minWidth: 0 }}
                     >
                       <input
                         type="checkbox"
@@ -363,7 +363,7 @@ export default function CaseTab({ matterId }) {
                         checked={countForm.defendant_ids.includes(d.id)}
                         onChange={() => toggleDefendantInForm(d.id)}
                       />
-                      <span>{d.name}{d.dismissed ? ' (dismissed)' : ''}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}{d.dismissed ? ' (dismissed)' : ''}</span>
                     </label>
                   ))}
                 </div>
