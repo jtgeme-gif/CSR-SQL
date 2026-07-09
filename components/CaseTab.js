@@ -257,7 +257,7 @@ export default function CaseTab({ matterId }) {
       <div className="section-card">
         <div className="section-card-header">
           <h3>Counts</h3>
-          <button className="btn-small btn-primary" onClick={openAddCount}>+ Add Count</button>
+          <button className="btn-small btn-primary" style={{ background: 'red', borderColor: 'red' }} onClick={openAddCount}>+ Add Count</button>
         </div>
 
         {counts.length === 0 && <p className="muted">No counts entered yet.</p>}
