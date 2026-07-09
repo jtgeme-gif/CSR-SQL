@@ -257,7 +257,7 @@ export default function CaseTab({ matterId }) {
       <div className="section-card">
         <div className="section-card-header">
           <h3>Counts</h3>
-          <button className="btn-small btn-primary" style={{ background: 'red', borderColor: 'red' }} onClick={openAddCount}>+ Add Count</button>
+          <button className="btn-small btn-primary" onClick={openAddCount}>+ Add Count</button>
         </div>
 
         {counts.length === 0 && <p className="muted">No counts entered yet.</p>}
@@ -355,11 +355,11 @@ export default function CaseTab({ matterId }) {
                   {[...defendants].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
                     <label
                       key={`${d.type}-${d.id}`}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '6px', fontSize: '13px', minWidth: 0 }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '6px', fontSize: '13px', fontWeight: 400, color: 'var(--text)', marginBottom: 0, minWidth: 0 }}
                     >
                       <input
                         type="checkbox"
-                        style={{ margin: 0, flexShrink: 0 }}
+                        style={{ width: 'auto', margin: 0, flexShrink: 0 }}
                         checked={countForm.defendant_ids.includes(d.id)}
                         onChange={() => toggleDefendantInForm(d.id)}
                       />
