@@ -351,7 +351,7 @@ export default function CaseTab({ matterId }) {
               <div className="form-field">
                 <label>Applies to</label>
                 {defendants.length === 0 && <p className="muted">No Defendants/Co-Defendants on this matter yet.</p>}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px 16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px 16px' }}>
                   {[...defendants].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
                     <label
                       key={`${d.type}-${d.id}`}
@@ -363,7 +363,7 @@ export default function CaseTab({ matterId }) {
                         checked={countForm.defendant_ids.includes(d.id)}
                         onChange={() => toggleDefendantInForm(d.id)}
                       />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}{d.dismissed ? ' (dismissed)' : ''}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: '80px', flexShrink: 1 }}>{d.name}{d.dismissed ? ' (dismissed)' : ''}</span>
                     </label>
                   ))}
                 </div>
