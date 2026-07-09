@@ -115,6 +115,28 @@ export default function NewMatterPage() {
       }
     }
 
+    // Auto-creates the matching CSR Tracker row, flagged CreatedinMT so the
+    // standalone CSR app knows to lock it from manual editing there. Not
+    // fatal if this fails - the matter itself is already saved either way.
+    try {
+      const csrRes = await fetch('/api/csr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseName: payload.case_name,
+          practiceGroup: payload.practice_group,
+          fileNumber: payload.file_number,
+          dateOpened: payload.date_opened,
+        }),
+      });
+      if (!csrRes.ok) {
+        const body = await csrRes.json().catch(() => ({}));
+        alert('Matter created, but adding it to the CSR Tracker failed: ' + (body.error || csrRes.status));
+      }
+    } catch (csrErr) {
+      alert('Matter created, but adding it to the CSR Tracker failed: ' + csrErr.message);
+    }
+
     setSaving(false);
     router.push(`/matters/${matterId}`);
   }

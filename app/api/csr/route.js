@@ -2,45 +2,51 @@
 // It runs server-side (Next.js API route), never sent to the browser.
 //
 // ---------------------------------------------------------------------
-// STILL NEEDED FROM YOU before this actually works — everything marked
-// TODO below is a real gap, not a style choice:
+// STILL NEEDED FROM YOU before this actually works:
 //
-// 1. A dedicated Entra app registration for CSR (do NOT reuse File
-//    Portal's — different purpose, should have its own scoped secret).
-//    Needs Application permission: Sites.Read.All (read-only is enough
-//    here, since this route never writes).
+// 1. A dedicated Entra app registration for CSR (not File Portal's).
+//    Needs Application permission: Sites.ReadWrite.All — this route now
+//    both reads (GET) and creates (POST) CSR Tracker rows, so read-only
+//    is no longer enough.
 //    -> gives you: Client ID, Tenant ID, Client Secret
 //
-// 2. The exact SharePoint site and list identifiers for the "HCC CSR
-//    Tracker" list — either the site/list names (used with Graph's
-//    site-path lookup) or their raw IDs if you already have them from
-//    another integration.
+// 2. The SharePoint site and list identifiers for the CSR Tracker list.
 //
-// 3. The exact internal column names on that list for: Case Name,
-//    Initial CSR Date, Most Recent CSR, Next CSR Due. SharePoint's
-//    *displayed* column names often differ from their internal field
-//    names (this bit us before with AssignedStaff vs Assignedstaff) —
-//    these need to be pulled from the list itself, not guessed.
+// Field names below are confirmed from the actual list column settings
+// screen you shared — no longer guesses.
 //
-// Once you have these, they go in .env.local (never committed to git):
+// Once you have the Entra app + site/list IDs, they go in .env.local
+// (never committed to git):
 //   CSR_TENANT_ID=...
 //   CSR_CLIENT_ID=...
 //   CSR_CLIENT_SECRET=...
-//   CSR_SITE_ID=...      (or CSR_SITE_PATH, see getSiteId below)
-//   CSR_LIST_ID=...      (or CSR_LIST_NAME)
+//   CSR_SITE_ID=...
+//   CSR_LIST_ID=...
 // ---------------------------------------------------------------------
 
 const TENANT_ID = process.env.CSR_TENANT_ID;
 const CLIENT_ID = process.env.CSR_CLIENT_ID;
 const CLIENT_SECRET = process.env.CSR_CLIENT_SECRET;
-const SITE_ID = process.env.CSR_SITE_ID; // TODO: confirm - see note above
-const LIST_ID = process.env.CSR_LIST_ID; // TODO: confirm - see note above
+const SITE_ID = process.env.CSR_SITE_ID;
+const LIST_ID = process.env.CSR_LIST_ID;
 
-// TODO: confirm these match the list's actual internal field names
-const FIELD_CASE_NAME = 'CaseName';
-const FIELD_INITIAL_DATE = 'InitialCSRDate';
-const FIELD_MOST_RECENT = 'MostRecentCSR';
-const FIELD_NEXT_DUE = 'NextCSRDue';
+// Confirmed real field names from the CSR Tracker list.
+const FIELD_MATTER = 'Matter';              // the Case Name equivalent
+const FIELD_PRACTICE_GROUP = 'Practicegroup';
+const FIELD_FILE_NUMBER = 'Filenumber';
+const FIELD_INITIAL_CSR = 'Initialcsr';
+const FIELD_PRIOR_CSR = 'Nextcsr2';  // displayed as "PriorcsrDate" but the real internal name is Nextcsr2
+const FIELD_NEXT_CSR = 'Nextcsr1';
+const FIELD_DATE_OPENED = 'Dateopened';
+const FIELD_CREATED_IN_MT = 'CreatedinMT'; // the lock flag - true means "don't edit in the standalone CSR app"
+
+const INITIAL_CSR_OFFSET_DAYS = 45; // Initial CSR Date = Date Opened + 45 days
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 async function getAccessToken() {
   const url = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
@@ -63,35 +69,28 @@ async function getAccessToken() {
   return data.access_token;
 }
 
+function checkConfigured() {
+  if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET || !SITE_ID || !LIST_ID) {
+    throw new Error('CSR integration is not configured yet (missing environment variables).');
+  }
+}
+
 export async function GET(request) {
   try {
+    checkConfigured();
     const { searchParams } = new URL(request.url);
     const caseName = searchParams.get('caseName');
     if (!caseName) {
       return Response.json({ error: 'caseName is required' }, { status: 400 });
     }
 
-    if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET || !SITE_ID || !LIST_ID) {
-      return Response.json(
-        { error: 'CSR integration is not configured yet (missing environment variables).' },
-        { status: 500 }
-      );
-    }
-
     const token = await getAccessToken();
 
-    // Graph API: list items, expanded to include field values, filtered by
-    // Case Name. $filter on lookup/text fields requires the field to be
-    // indexed in SharePoint for reliable filtering at scale — worth
-    // checking that once the real list is confirmed.
     const url =
       `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items` +
-      `?expand=fields&$filter=fields/${FIELD_CASE_NAME} eq '${encodeURIComponent(caseName)}'`;
+      `?expand=fields&$filter=fields/${FIELD_MATTER} eq '${encodeURIComponent(caseName)}'`;
 
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Graph API request failed: ${res.status} ${text}`);
@@ -99,16 +98,60 @@ export async function GET(request) {
 
     const data = await res.json();
     const item = data.value?.[0];
-
-    if (!item) {
-      return Response.json(null);
-    }
+    if (!item) return Response.json(null);
 
     return Response.json({
-      initialDate: item.fields[FIELD_INITIAL_DATE] || null,
-      mostRecent: item.fields[FIELD_MOST_RECENT] || null,
-      nextDue: item.fields[FIELD_NEXT_DUE] || null,
+      initialDate: item.fields[FIELD_INITIAL_CSR] || null,
+      mostRecent: item.fields[FIELD_PRIOR_CSR] || null,
+      nextDue: item.fields[FIELD_NEXT_CSR] || null,
     });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// Called once, right after a new matter is created in NMT (app/matters/new).
+// Creates the matching CSR Tracker row automatically, flagged CreatedinMT
+// so the standalone CSR app knows to lock it from manual editing there.
+export async function POST(request) {
+  try {
+    checkConfigured();
+    const body = await request.json();
+    const { caseName, practiceGroup, fileNumber, dateOpened } = body;
+
+    if (!caseName || !dateOpened) {
+      return Response.json({ error: 'caseName and dateOpened are required' }, { status: 400 });
+    }
+
+    const token = await getAccessToken();
+
+    const initialCsr = addDays(dateOpened, INITIAL_CSR_OFFSET_DAYS);
+
+    const fields = {
+      [FIELD_MATTER]: caseName,
+      [FIELD_PRACTICE_GROUP]: practiceGroup || null,
+      [FIELD_FILE_NUMBER]: fileNumber || null,
+      [FIELD_DATE_OPENED]: dateOpened,
+      [FIELD_INITIAL_CSR]: initialCsr,
+      [FIELD_CREATED_IN_MT]: true,
+    };
+
+    const url = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fields }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Graph API create failed: ${res.status} ${text}`);
+    }
+
+    return Response.json({ success: true, initialCsr });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
