@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabaseClient';
 import { formatPhoneDisplay } from '../../../lib/formatPhone';
@@ -25,6 +25,7 @@ const TABS = ['Overview', 'Case', 'Scheduling', 'Witnesses', 'Mediation / Settle
 
 export default function MatterDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const matterId = params.id;
 
   const [matter, setMatter] = useState(null);
@@ -84,7 +85,7 @@ export default function MatterDetailPage() {
     setIdForm(m);
     setCourtForm(m);
 
-    const { data: staffData } = await supabase.from('matter_staff').select('*, staff(id, first_name, last_name)').eq('matter_id', matterId).order('created_at');
+    const { data: staffData } = await supabase.from('matter_staff').select('*, staff(id, first_name, last_name, email)').eq('matter_id', matterId).order('created_at');
     setStaff(staffData || []);
 
     const { data: ceData } = await supabase.from('case_entities').select('*, entities(id, name)').eq('matter_id', matterId);
@@ -110,8 +111,10 @@ export default function MatterDetailPage() {
 
   async function saveIdentification() {
     setSavingId(true);
+    const newCaseName = idForm.case_name?.trim() || matter.case_name;
+    const nameChanged = newCaseName !== matter.case_name;
     const payload = {
-      case_name: idForm.case_name?.trim() || matter.case_name,
+      case_name: newCaseName,
       file_number: idForm.file_number?.trim() || null,
       practice_group: idForm.practice_group || null,
       date_opened: idForm.date_opened || null,
@@ -119,6 +122,21 @@ export default function MatterDetailPage() {
     const { error } = await supabase.from('matters').update(payload).eq('id', matterId);
     setSavingId(false);
     if (error) { alert(error.message); return; }
+
+    if (nameChanged && matter.csr_item_id) {
+      try {
+        const res = await fetch('/api/csr', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId: matter.csr_item_id, action: 'rename', payload: { title: newCaseName } }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Unknown error');
+      } catch (err) {
+        alert('Case Name updated, but syncing the new name to CSR failed: ' + err.message);
+      }
+    }
+
     setEditingId(false);
     load();
   }
@@ -140,6 +158,42 @@ export default function MatterDetailPage() {
     if (!error) load();
   }
 
+  // ---------- Close/Reopen (separate from case_status - this is the firm's
+  // own "stop actively monitoring" decision, not the court's procedural state) ----------
+  async function toggleFileClosed() {
+    const newClosed = !matter.file_closed;
+    const { error } = await supabase.from('matters').update({ file_closed: newClosed }).eq('id', matterId);
+    if (error) { alert(error.message); return; }
+    if (matter.csr_item_id) {
+      try {
+        const res = await fetch('/api/csr', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId: matter.csr_item_id, action: 'setClosed', payload: { closed: newClosed } }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Unknown error');
+      } catch (err) {
+        alert('Matter status updated, but syncing the closed status to CSR failed: ' + err.message);
+      }
+    }
+    load();
+  }
+
+  // ---------- Delete (type-YES confirmation, Supabase-only, never touches CSR) ----------
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteMatter() {
+    if (deleteConfirmText.trim().toUpperCase() !== 'YES') { alert('Type YES to confirm.'); return; }
+    setDeleting(true);
+    const { error } = await supabase.from('matters').delete().eq('id', matterId);
+    setDeleting(false);
+    if (error) { alert(error.message); return; }
+    router.push('/');
+  }
+
   // ---------- Assigned staff (behind Case Identification Edit) ----------
   function staffDisplayName(s) {
     if (s.staff) return `${s.staff.first_name || ''} ${s.staff.last_name || ''}`.trim();
@@ -154,6 +208,27 @@ export default function MatterDetailPage() {
     load();
   }
   async function removeStaff(id) { await supabase.from('matter_staff').delete().eq('id', id); load(); }
+
+  const [syncingStaffToCsr, setSyncingStaffToCsr] = useState(false);
+  async function updateCsrStaff() {
+    if (!matter.csr_item_id) { alert('This matter is not linked to the CSR Tracker yet - link it from the CSR tab first.'); return; }
+    setSyncingStaffToCsr(true);
+    const staffNames = staff.map(staffDisplayName).join('; ');
+    const staffEmails = staff.map((s) => s.staff?.email).filter(Boolean).join('; ');
+    try {
+      const res = await fetch('/api/csr', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: matter.csr_item_id, action: 'updateStaff', payload: { staffNames, staffEmails } }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Unknown error');
+      alert('CSR Tracker staff/email updated.');
+    } catch (err) {
+      alert('Failed to update CSR Tracker: ' + err.message);
+    }
+    setSyncingStaffToCsr(false);
+  }
 
   // ---------- Client Insurer / Claim reps (behind Case Identification Edit) ----------
   async function addClaimRep() {
@@ -579,6 +654,9 @@ export default function MatterDetailPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h1>{matter.case_name}</h1>
             <button className="star-toggle" onClick={toggleStar} title="Star this matter">{matter.starred ? '★' : '☆'}</button>
+            {matter.file_closed && <span className="badge badge-gray">Closed</span>}
+            <button className="btn-small" onClick={toggleFileClosed}>{matter.file_closed ? 'Reopen' : 'Close'}</button>
+            <button className="btn-small btn-small-danger" onClick={() => { setDeleteConfirmText(''); setDeleteModalOpen(true); }}>Delete</button>
           </div>
         </div>
 
@@ -694,6 +772,9 @@ export default function MatterDetailPage() {
                   onChange={(id, name) => setNewStaffPick({ staff_id: id, staff_name: name })}
                 />
                 <button className="btn-small" onClick={addStaff}>+ Add</button>
+                <button className="btn-small" onClick={updateCsrStaff} disabled={syncingStaffToCsr}>
+                  {syncingStaffToCsr ? 'Updating…' : 'Update CSR Staff'}
+                </button>
               </div>
             </div>
 
@@ -881,11 +962,34 @@ export default function MatterDetailPage() {
       )}
 
       {activeTab === 'CSR' && (
-        <CSRTab caseName={matter.case_name} />
+        <CSRTab matter={matter} onLinked={load} />
       )}
 
       {modalPersonId && <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />}
       {modalEntityId && <EntityModal entityId={modalEntityId} onClose={() => setModalEntityId(null)} onChanged={load} />}
+
+      {deleteModalOpen && (
+        <div className="modal-overlay" onClick={() => setDeleteModalOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Delete Matter</h2>
+              <button className="modal-close" onClick={() => setDeleteModalOpen(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>This permanently deletes <strong>{matter.case_name}</strong> and everything attached to it (parties, events, counts, etc.). This cannot be undone.</p>
+              <p className="muted" style={{ fontSize: '12px' }}>This does not touch the CSR Tracker in SharePoint, even if this matter is linked.</p>
+              <div className="form-field">
+                <label>Type YES to confirm</label>
+                <input value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} />
+              </div>
+              <div className="modal-actions">
+                <button className="btn btn-danger" onClick={deleteMatter} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete Matter'}</button>
+                <button className="btn" onClick={() => setDeleteModalOpen(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {partyModalRole && (
         <div className="modal-overlay" onClick={() => setPartyModalRole(null)}>

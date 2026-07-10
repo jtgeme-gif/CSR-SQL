@@ -129,9 +129,11 @@ export default function NewMatterPage() {
           dateOpened: payload.date_opened,
         }),
       });
+      const csrBody = await csrRes.json().catch(() => ({}));
       if (!csrRes.ok) {
-        const body = await csrRes.json().catch(() => ({}));
-        alert('Matter created, but adding it to the CSR Tracker failed: ' + (body.error || csrRes.status));
+        alert('Matter created, but adding it to the CSR Tracker failed: ' + (csrBody.error || csrRes.status));
+      } else if (csrBody.id) {
+        await supabase.from('matters').update({ csr_item_id: csrBody.id }).eq('id', matterId);
       }
     } catch (csrErr) {
       alert('Matter created, but adding it to the CSR Tracker failed: ' + csrErr.message);

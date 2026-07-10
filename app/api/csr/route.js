@@ -1,28 +1,14 @@
 // This route is the ONLY place the CSR Entra app credentials are used.
 // It runs server-side (Next.js API route), never sent to the browser.
 //
-// ---------------------------------------------------------------------
-// STILL NEEDED FROM YOU before this actually works:
+// Design: once a matter is linked (matters.csr_item_id is set), every read
+// and write goes straight to that specific SharePoint item by ID - the one
+// thing that never changes no matter what gets renamed on either side.
+// Name-matching (by Title) only exists as a fallback for matters that
+// haven't been linked yet.
 //
-// 1. A dedicated Entra app registration for CSR (not File Portal's).
-//    Needs Application permission: Sites.ReadWrite.All — this route now
-//    both reads (GET) and creates (POST) CSR Tracker rows, so read-only
-//    is no longer enough.
-//    -> gives you: Client ID, Tenant ID, Client Secret
-//
-// 2. The SharePoint site and list identifiers for the CSR Tracker list.
-//
-// Field names below are confirmed from the actual list column settings
-// screen you shared — no longer guesses.
-//
-// Once you have the Entra app + site/list IDs, they go in .env.local
-// (never committed to git):
-//   CSR_TENANT_ID=...
-//   CSR_CLIENT_ID=...
-//   CSR_CLIENT_SECRET=...
-//   CSR_SITE_ID=...
-//   CSR_LIST_ID=...
-// ---------------------------------------------------------------------
+// Env vars required (Vercel + .env.local):
+//   CSR_TENANT_ID, CSR_CLIENT_ID, CSR_CLIENT_SECRET, CSR_SITE_ID, CSR_LIST_ID
 
 const TENANT_ID = process.env.CSR_TENANT_ID;
 const CLIENT_ID = process.env.CSR_CLIENT_ID;
@@ -30,17 +16,20 @@ const CLIENT_SECRET = process.env.CSR_CLIENT_SECRET;
 const SITE_ID = process.env.CSR_SITE_ID;
 const LIST_ID = process.env.CSR_LIST_ID;
 
-// Confirmed real field names from the CSR Tracker list.
-const FIELD_MATTER = 'Matter';              // the Case Name equivalent
+// Confirmed real internal field names from the CSR Tracker list.
+const FIELD_TITLE = 'Title'; // the Case Name equivalent - NOT the Matter field
 const FIELD_PRACTICE_GROUP = 'Practicegroup';
 const FIELD_FILE_NUMBER = 'Filenumber';
 const FIELD_INITIAL_CSR = 'Initialcsr';
-const FIELD_PRIOR_CSR = 'Nextcsr2';  // displayed as "PriorcsrDate" but the real internal name is Nextcsr2
+const FIELD_PRIOR_CSR = 'Nextcsr2';   // displays as "PriorcsrDate"
 const FIELD_NEXT_CSR = 'Nextcsr1';
 const FIELD_DATE_OPENED = 'Dateopened';
-const FIELD_CREATED_IN_MT = 'CreatedinMT'; // the lock flag - true means "don't edit in the standalone CSR app"
+const FIELD_CREATED_IN_MT = 'CreatedinMT';
+const FIELD_ASSIGNED_STAFF = 'Assignedstaff';
+const FIELD_ASSIGNED_EMAILS = 'AssignedEmails';
+const FIELD_CLOSED = 'Closed';
 
-const INITIAL_CSR_OFFSET_DAYS = 45; // Initial CSR Date = Date Opened + 45 days
+const INITIAL_CSR_OFFSET_DAYS = 45;
 
 function addDays(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -75,76 +64,76 @@ function checkConfigured() {
   }
 }
 
+function shapeItem(item) {
+  return {
+    id: item.id,
+    initialDate: item.fields[FIELD_INITIAL_CSR] || null,
+    mostRecent: item.fields[FIELD_PRIOR_CSR] || null,
+    nextDue: item.fields[FIELD_NEXT_CSR] || null,
+    closed: !!item.fields[FIELD_CLOSED],
+  };
+}
+
+// GET ?itemId=X  -> direct lookup by SharePoint item ID (preferred, used once linked)
+// GET ?caseName=X -> fallback name-match by Title, only relevant before linking
 export async function GET(request) {
   try {
     checkConfigured();
     const { searchParams } = new URL(request.url);
+    const itemId = searchParams.get('itemId');
     const caseName = searchParams.get('caseName');
-    if (!caseName) {
-      return Response.json({ error: 'caseName is required' }, { status: 400 });
+    const token = await getAccessToken();
+
+    if (itemId) {
+      const url = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items/${itemId}?expand=fields`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Graph API request failed: ${res.status} ${text}`);
+      }
+      const item = await res.json();
+      return Response.json(shapeItem(item));
     }
 
-    const token = await getAccessToken();
+    if (!caseName) {
+      return Response.json({ error: 'itemId or caseName is required' }, { status: 400 });
+    }
 
     const url =
       `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items` +
-      `?expand=fields&$filter=fields/${FIELD_MATTER} eq '${encodeURIComponent(caseName)}'`;
-
+      `?expand=fields&$filter=fields/${FIELD_TITLE} eq '${encodeURIComponent(caseName)}'`;
     const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        // Matter isn't an indexed column on the list, so Graph refuses the
-        // filter without this. Fine for a list this size; worth indexing
-        // the Matter column in SharePoint directly if the list ever grows
-        // large enough for this to become a real performance concern.
-        Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly',
-      },
+      headers: { Authorization: `Bearer ${token}`, Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly' },
     });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Graph API request failed: ${res.status} ${text}`);
     }
-
     const data = await res.json();
     const item = data.value?.[0];
+
     if (!item) {
-      // Diagnostic-only: pull back every existing Matter value so a
-      // mismatch (invisible whitespace, different dash character, etc.)
-      // can be spotted directly instead of guessed at.
-      const allUrl = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items?expand=fields(select=${FIELD_MATTER})`;
+      const allUrl = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items?expand=fields(select=${FIELD_TITLE})`;
       const allRes = await fetch(allUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly',
-        },
+        headers: { Authorization: `Bearer ${token}`, Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly' },
       });
       let existingValues = [];
       if (allRes.ok) {
         const allData = await allRes.json();
-        existingValues = (allData.value || []).map((v) => v.fields[FIELD_MATTER]).filter(Boolean);
+        existingValues = (allData.value || []).map((v) => v.fields[FIELD_TITLE]).filter(Boolean);
       }
-      return Response.json({
-        noMatch: true,
-        searchedFor: caseName,
-        searchedForLength: caseName.length,
-        existingValues,
-      });
+      return Response.json({ noMatch: true, searchedFor: caseName, searchedForLength: caseName.length, existingValues });
     }
 
-    return Response.json({
-      id: item.id,
-      initialDate: item.fields[FIELD_INITIAL_CSR] || null,
-      mostRecent: item.fields[FIELD_PRIOR_CSR] || null,
-      nextDue: item.fields[FIELD_NEXT_CSR] || null,
-    });
+    return Response.json(shapeItem(item));
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
 }
 
-// Called once, right after a new matter is created in NMT (app/matters/new).
-// Creates the matching CSR Tracker row automatically, flagged CreatedinMT
-// so the standalone CSR app knows to lock it from manual editing there.
+// Creates a brand-new CSR Tracker row for a matter that doesn't exist there
+// yet, flagged CreatedinMT. Returns the new item's ID - caller is responsible
+// for saving that as matters.csr_item_id.
 export async function POST(request) {
   try {
     checkConfigured();
@@ -156,11 +145,10 @@ export async function POST(request) {
     }
 
     const token = await getAccessToken();
-
     const initialCsr = addDays(dateOpened, INITIAL_CSR_OFFSET_DAYS);
 
     const fields = {
-      [FIELD_MATTER]: caseName,
+      [FIELD_TITLE]: caseName,
       [FIELD_PRACTICE_GROUP]: practiceGroup || null,
       [FIELD_FILE_NUMBER]: fileNumber || null,
       [FIELD_DATE_OPENED]: dateOpened,
@@ -171,10 +159,7 @@ export async function POST(request) {
     const url = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields }),
     });
 
@@ -183,39 +168,55 @@ export async function POST(request) {
       throw new Error(`Graph API create failed: ${res.status} ${text}`);
     }
 
-    return Response.json({ success: true, initialCsr });
+    const created = await res.json();
+    return Response.json({ success: true, id: created.id, initialCsr });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
 }
 
-// Called from the "Submit CSR" modal. Sets Prior CSR Date and Next CSR Due
-// on the specific SharePoint item already matched to this matter. Works for
-// any linked matter, regardless of CreatedinMT - linking a matter (setting
-// its Matter field) is itself what makes it editable from NMT going forward.
+// One generic endpoint for every kind of update, discriminated by `action`,
+// so callers (Submit CSR, Assigned Staff sync, Case Name rename, Close/Reopen)
+// never need to know raw SharePoint field names - just the action and its
+// own plain-language payload.
 export async function PATCH(request) {
   try {
     checkConfigured();
     const body = await request.json();
-    const { itemId, priorCsrDate, nextCsrDue } = body;
+    const { itemId, action, payload } = body;
 
-    if (!itemId || !priorCsrDate || !nextCsrDue) {
-      return Response.json({ error: 'itemId, priorCsrDate, and nextCsrDue are required' }, { status: 400 });
+    if (!itemId || !action) {
+      return Response.json({ error: 'itemId and action are required' }, { status: 400 });
+    }
+
+    let fields = {};
+
+    if (action === 'submitCsr') {
+      const { priorCsrDate, nextCsrDue } = payload || {};
+      if (!priorCsrDate || !nextCsrDue) {
+        return Response.json({ error: 'priorCsrDate and nextCsrDue are required' }, { status: 400 });
+      }
+      fields = { [FIELD_PRIOR_CSR]: priorCsrDate, [FIELD_NEXT_CSR]: nextCsrDue };
+    } else if (action === 'updateStaff') {
+      const { staffNames, staffEmails } = payload || {};
+      fields = { [FIELD_ASSIGNED_STAFF]: staffNames || '', [FIELD_ASSIGNED_EMAILS]: staffEmails || '' };
+    } else if (action === 'rename') {
+      const { title } = payload || {};
+      if (!title) return Response.json({ error: 'title is required' }, { status: 400 });
+      fields = { [FIELD_TITLE]: title };
+    } else if (action === 'setClosed') {
+      const { closed } = payload || {};
+      fields = { [FIELD_CLOSED]: !!closed };
+    } else {
+      return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
 
     const token = await getAccessToken();
-
     const url = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items/${itemId}/fields`;
     const res = await fetch(url, {
       method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        [FIELD_PRIOR_CSR]: priorCsrDate,
-        [FIELD_NEXT_CSR]: nextCsrDue,
-      }),
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
     });
 
     if (!res.ok) {
