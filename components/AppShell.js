@@ -58,7 +58,9 @@ export default function AppShell({ session, onSignOut, children }) {
 
           <nav className="sidebar-nav">
             <div className="nav-section-label">Main</div>
-            <span className="nav-item disabled">Dashboard</span>
+            <Link href="/dashboard" className={`nav-item ${isActive('/dashboard') ? 'active' : ''}`}>
+              Dashboard
+            </Link>
             <Link href="/" className={`nav-item ${isActive('/') ? 'active' : ''}`}>
               All Matters
             </Link>
