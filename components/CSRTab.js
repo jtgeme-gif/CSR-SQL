@@ -7,6 +7,11 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatCsrDate(isoStr) {
+  if (!isoStr) return null;
+  return new Date(isoStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 function addDays(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
@@ -229,12 +234,12 @@ export default function CSRTab({ matter, onLinked }) {
           <button className="btn btn-primary" onClick={openSubmitModal}>Submit CSR</button>
         </div>
         <div className="detail-grid">
-          <div className="detail-card"><span className="detail-label">Initial CSR Date</span><span className="detail-value">{csr.initialDate || '—'}</span></div>
-          <div className="detail-card"><span className="detail-label">Prior CSR Date</span><span className="detail-value">{csr.mostRecent || '—'}</span></div>
+          <div className="detail-card"><span className="detail-label">Initial CSR Date</span><span className="detail-value">{formatCsrDate(csr.initialDate) || '—'}</span></div>
+          <div className="detail-card"><span className="detail-label">Prior CSR Date</span><span className="detail-value">{formatCsrDate(csr.mostRecent) || '—'}</span></div>
           <div className="detail-card">
             <span className="detail-label">Next CSR Due</span>
             <span className="detail-value" style={{ color: overdue ? 'var(--red)' : undefined, fontWeight: overdue ? 600 : undefined }}>
-              {csr.nextDue || '—'}{overdue ? ' (Overdue)' : ''}
+              {formatCsrDate(csr.nextDue) || '—'}{overdue ? ' (Overdue)' : ''}
             </span>
           </div>
           <div className="detail-card"><span className="detail-label">Closed in CSR Tracker</span><span className="detail-value">{csr.closed ? 'Yes' : 'No'}</span></div>
