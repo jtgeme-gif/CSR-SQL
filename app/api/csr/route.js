@@ -107,9 +107,32 @@ export async function GET(request) {
 
     const data = await res.json();
     const item = data.value?.[0];
-    if (!item) return Response.json(null);
+    if (!item) {
+      // Diagnostic-only: pull back every existing Matter value so a
+      // mismatch (invisible whitespace, different dash character, etc.)
+      // can be spotted directly instead of guessed at.
+      const allUrl = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items?expand=fields(select=${FIELD_MATTER})`;
+      const allRes = await fetch(allUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly',
+        },
+      });
+      let existingValues = [];
+      if (allRes.ok) {
+        const allData = await allRes.json();
+        existingValues = (allData.value || []).map((v) => v.fields[FIELD_MATTER]).filter(Boolean);
+      }
+      return Response.json({
+        noMatch: true,
+        searchedFor: caseName,
+        searchedForLength: caseName.length,
+        existingValues,
+      });
+    }
 
     return Response.json({
+      id: item.id,
       initialDate: item.fields[FIELD_INITIAL_CSR] || null,
       mostRecent: item.fields[FIELD_PRIOR_CSR] || null,
       nextDue: item.fields[FIELD_NEXT_CSR] || null,
@@ -161,6 +184,46 @@ export async function POST(request) {
     }
 
     return Response.json({ success: true, initialCsr });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// Called from the "Submit CSR" modal. Sets Prior CSR Date and Next CSR Due
+// on the specific SharePoint item already matched to this matter. Works for
+// any linked matter, regardless of CreatedinMT - linking a matter (setting
+// its Matter field) is itself what makes it editable from NMT going forward.
+export async function PATCH(request) {
+  try {
+    checkConfigured();
+    const body = await request.json();
+    const { itemId, priorCsrDate, nextCsrDue } = body;
+
+    if (!itemId || !priorCsrDate || !nextCsrDue) {
+      return Response.json({ error: 'itemId, priorCsrDate, and nextCsrDue are required' }, { status: 400 });
+    }
+
+    const token = await getAccessToken();
+
+    const url = `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items/${itemId}/fields`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        [FIELD_PRIOR_CSR]: priorCsrDate,
+        [FIELD_NEXT_CSR]: nextCsrDue,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Graph API update failed: ${res.status} ${text}`);
+    }
+
+    return Response.json({ success: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
