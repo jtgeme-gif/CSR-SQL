@@ -90,7 +90,16 @@ export async function GET(request) {
       `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LIST_ID}/items` +
       `?expand=fields&$filter=fields/${FIELD_MATTER} eq '${encodeURIComponent(caseName)}'`;
 
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // Matter isn't an indexed column on the list, so Graph refuses the
+        // filter without this. Fine for a list this size; worth indexing
+        // the Matter column in SharePoint directly if the list ever grows
+        // large enough for this to become a real performance concern.
+        Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly',
+      },
+    });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Graph API request failed: ${res.status} ${text}`);
