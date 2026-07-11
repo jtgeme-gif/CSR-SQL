@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import PersonPicker from '../../../components/PersonPicker';
 import EntityPicker from '../../../components/EntityPicker';
 import StaffPicker from '../../../components/StaffPicker';
+import { deriveShortName } from '../../../lib/deriveShortName';
 
 const PRACTICE_GROUPS = ['Auto-Neg', 'Business', 'Police', 'Labor-Employment', 'Municipal', 'Zoning', 'School'];
 const CASE_STATUSES = ['Pre-litigation Monitoring', 'Active Litigation', 'Stayed', 'Closed', 'Appeal'];
@@ -14,12 +15,14 @@ export default function NewMatterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
     case_name: '',
+    short_name: '',
     practice_group: '',
     case_status: 'Pre-litigation Monitoring',
     date_opened: '',
     incident_date: '',
     file_number: '',
   });
+  const [shortNameTouched, setShortNameTouched] = useState(false);
 
   const [claimRepPick, setClaimRepPick] = useState({ person_id: null, person_name: '' });
   const [claimNumber, setClaimNumber] = useState('');
@@ -35,6 +38,25 @@ export default function NewMatterPage() {
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  // Auto-derives Short Name from Case Name (everything before " v "/" v. ")
+  // only while the person hasn't manually typed their own Short Name yet -
+  // same safe "only fill when blank/untouched" pattern used elsewhere in the
+  // app (e.g. Response Due auto-calculating without fighting a manual edit).
+  function updateCaseName(value) {
+    setForm((f) => {
+      const next = { ...f, case_name: value };
+      if (!shortNameTouched) {
+        next.short_name = deriveShortName(value);
+      }
+      return next;
+    });
+  }
+
+  function updateShortName(value) {
+    setShortNameTouched(true);
+    update('short_name', value);
   }
 
   function addStaffToList() {
@@ -73,6 +95,7 @@ export default function NewMatterPage() {
 
     const payload = {
       case_name: form.case_name.trim(),
+      short_name: form.short_name.trim() || null,
       practice_group: form.practice_group || null,
       case_status: form.case_status || null,
       date_opened: form.date_opened || null,
@@ -157,9 +180,22 @@ export default function NewMatterPage() {
           <input
             type="text"
             value={form.case_name}
-            onChange={(e) => update('case_name', e.target.value)}
+            onChange={(e) => updateCaseName(e.target.value)}
             placeholder="e.g. Smith v. Jones"
           />
+        </div>
+
+        <div className="form-field">
+          <label>Short Name</label>
+          <input
+            type="text"
+            value={form.short_name}
+            onChange={(e) => updateShortName(e.target.value)}
+            placeholder="Auto-fills from Case Name, e.g. 'Smith' - override anytime"
+          />
+          <p className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+            Used in calendar event titles ("Short Name - Event"). Auto-fills from Case Name until you type your own.
+          </p>
         </div>
 
         <div className="form-row">

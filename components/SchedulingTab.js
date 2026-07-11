@@ -32,8 +32,9 @@ const OUTLOOK_ID_FIELDS = ['outlook_event_id', 'outlook_event_id_2', 'outlook_ev
 // start/end, not two separate events. Motion/Brief is the only type where
 // up to 3 independent calendar events exist, one per date, since Filed/
 // Response/Reply commonly move independently of each other.
-function getSlotDefs(label, description) {
-  const title = description?.trim() || label;
+function getSlotDefs(label, description, titlePrefix) {
+  const eventPart = description?.trim() || label;
+  const title = titlePrefix ? `${titlePrefix} - ${eventPart}` : eventPart;
   if (label === 'Discovery') {
     return [{ slot: 2, dateField: 'secondary_date', timed: false, title: `${title} — Response Due` }];
   }
@@ -78,6 +79,7 @@ function addHoursToTime(timeStr, hours) {
 export default function SchedulingTab({ matterId, onChanged }) {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
+  const [matterNameInfo, setMatterNameInfo] = useState(null);
   const [eventTypes, setEventTypes] = useState([]);
   const [frameOpen, setFrameOpen] = useState({ 'Court Dates & Deadlines': true, 'Discovery & Depositions': true, 'Motions & Briefs': true });
   const [frameSort, setFrameSort] = useState({ 'Court Dates & Deadlines': 'date', 'Discovery & Depositions': 'date', 'Motions & Briefs': 'date' });
@@ -101,7 +103,18 @@ export default function SchedulingTab({ matterId, onChanged }) {
     setEvents(allEvents || []);
     const { data: etData } = await supabase.from('event_types').select('*').order('label');
     setEventTypes(etData || []);
+    // Loaded independently here (rather than relying on a prop from the
+    // parent page) so this component works as a self-contained drop-in
+    // regardless of what the matter detail page currently passes down.
+    const { data: matterData } = await supabase.from('matters').select('case_name, short_name').eq('id', matterId).single();
+    setMatterNameInfo(matterData || null);
     setLoading(false);
+  }
+
+  // "[Short Name] - [Event]", per the finalized calendar sync design.
+  // Falls back to the full Case Name if Short Name was never set.
+  function calendarTitlePrefix() {
+    return matterNameInfo?.short_name || matterNameInfo?.case_name || '';
   }
 
   function typeLabelFor(eventTypeId) {
@@ -207,7 +220,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
   // resulting outlook_event_id(s) and last_synced_as_timed back to the row.
   async function syncEventToCalendar(eventRow) {
     const label = typeLabelFor(eventRow.event_type_id);
-    const defs = getSlotDefs(label, eventRow.description);
+    const defs = getSlotDefs(label, eventRow.description, calendarTitlePrefix());
     const updates = {};
 
     for (const def of defs) {
