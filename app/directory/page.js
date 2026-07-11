@@ -44,6 +44,7 @@ export default function DirectoryPage() {
       lastName: p.last_name || p.first_name || '',
       title: p.title,
       entityName: p.entities?.name || '',
+      department: p.department || '',
       phone: p.phone1,
       email: p.email1,
       isExpert: !!p.expert,
@@ -57,6 +58,7 @@ export default function DirectoryPage() {
       lastName: e.name || '',
       title: '',
       entityName: '',
+      department: '',
       phone: e.phone,
       email: e.email,
       isExpert: e.entity_type === 'Expert',
@@ -146,6 +148,7 @@ export default function DirectoryPage() {
               <th className="sortable" onClick={() => toggleSort('lastName')}>Name{sortArrow('lastName')}</th>
               <th>Title</th>
               <th>Entity</th>
+              <th>Department</th>
               <th>Phone</th>
               <th>Email</th>
               <th>Area of Expertise</th>
@@ -157,6 +160,7 @@ export default function DirectoryPage() {
                 <td><a className="row-link" onClick={() => handleRowClick(r)}>{r.name}</a></td>
                 <td>{r.title || '—'}</td>
                 <td>{r.entityName || '—'}</td>
+                <td>{r.department || '—'}</td>
                 <td>{r.phone || '—'}</td>
                 <td>{r.email || '—'}</td>
                 <td>{r.areaOfExpertise || (r.isExpert ? '—' : '')}</td>

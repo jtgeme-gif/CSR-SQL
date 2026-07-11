@@ -13,6 +13,7 @@ export default function NewPersonPage() {
     first_name: '', middle_name: '', last_name: '', title: '',
     identity: 'Individual',
     entity_id: null, entity_name: '',
+    department: '',
     address: '', city: '', state: '', zip: '',
     phone1: '', phone1_label: '', phone2: '', phone2_label: '',
     email1: '', email1_label: '', email2: '', email2_label: '',
@@ -56,6 +57,7 @@ export default function NewPersonPage() {
       title: form.title.trim() || null,
       identity: form.identity,
       entity_id: form.entity_id,
+      department: form.department.trim() || null,
       address: form.address.trim() || null,
       city: form.city.trim() || null,
       state: form.state.trim() || null,
@@ -132,6 +134,19 @@ export default function NewPersonPage() {
             valueName={form.entity_name}
             onChange={handleEntityChange}
           />
+        </div>
+
+        <div className="form-field">
+          <label>Department</label>
+          <input
+            type="text"
+            value={form.department}
+            onChange={(e) => update('department', e.target.value)}
+            placeholder="e.g. Police Department, City Attorney's Office"
+          />
+          <p className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+            Which department within the entity above — useful when one entity (e.g. a city) has multiple departments represented across your matters.
+          </p>
         </div>
 
         {form.identity === 'Judge' && (

@@ -92,6 +92,7 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
                   <th>Identity</th>
                   <th>Title</th>
                   <th>Entity</th>
+                  <th>Department</th>
                 </>
               )}
               <th>Phone</th>
@@ -114,6 +115,7 @@ export default function PeopleListView({ title, identityFilter, mediatorFilter }
                     <td>{p.identity}</td>
                     <td>{p.title || '—'}</td>
                     <td>{p.entities?.name || '—'}</td>
+                    <td>{p.department || '—'}</td>
                   </>
                 )}
                 <td>{formatPhoneDisplay(p.phone1) || '—'}</td>
