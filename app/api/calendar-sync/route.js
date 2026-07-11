@@ -67,7 +67,6 @@ export async function POST(request) {
         // Confirmed from the real flow's trigger schema: discoveryId (generic
         // id field, same reused-name pattern as depositionId), title, eventDate, location.
         const result = await callFlow(PA_CREATE_ALLDAY_URL, {
-          discoveryId: null,
           title,
           eventDate: date,
           location: location || '',
@@ -78,7 +77,6 @@ export async function POST(request) {
         // Field is literally named "depositionId" in the live flow's trigger
         // schema, reused for every timed type - not just depositions.
         const result = await callFlow(PA_CREATE_TIMED_URL, {
-          depositionId: null,
           title,
           startDateTime,
           endDateTime,
@@ -96,7 +94,6 @@ export async function POST(request) {
         checkConfigured(PA_UPDATE_ALLDAY_URL, 'PA_UPDATE_ALLDAY_URL');
         // Confirmed from the real flow's trigger schema: discoveryId, title, eventDate, location, outlookEventId.
         await callFlow(PA_UPDATE_ALLDAY_URL, {
-          discoveryId: null,
           title,
           eventDate: date,
           location: location || '',
@@ -109,7 +106,6 @@ export async function POST(request) {
         // id field, same reused-name pattern as Create Timed), title,
         // startDateTime, endDateTime, location, outlookEventId.
         await callFlow(PA_UPDATE_TIMED_URL, {
-          depositionId: null,
           title,
           startDateTime,
           endDateTime,
