@@ -21,6 +21,56 @@ const EVENT_TYPE_CONFIG = {
   'Mediation': { dateLabels: ['Date'], timed: true, hasLocation: true },
 };
 const DATE_FIELDS = ['event_date', 'secondary_date', 'tertiary_date'];
+const OUTLOOK_ID_FIELDS = ['outlook_event_id', 'outlook_event_id_2', 'outlook_event_id_3'];
+
+// Which calendar slot(s) a given event type needs, and what each represents.
+// Court Deadline / Discovery / timed types (Deposition, Hearing, Status
+// Conference/Pre-Trial, Mediation) only ever use slot 1. Discovery's
+// Sent/Received date (slot 1) deliberately never goes to the calendar -
+// only Response Due (slot 2) does, since Sent/Received is a fixed historical
+// record, not a deadline. Trial is one timed span using slots 1/2 as
+// start/end, not two separate events. Motion/Brief is the only type where
+// up to 3 independent calendar events exist, one per date, since Filed/
+// Response/Reply commonly move independently of each other.
+function getSlotDefs(label, description) {
+  const title = description?.trim() || label;
+  if (label === 'Discovery') {
+    return [{ slot: 2, dateField: 'secondary_date', timed: false, title: `${title} — Response Due` }];
+  }
+  if (label === 'Motion / Brief') {
+    return [
+      { slot: 1, dateField: 'event_date', timed: false, title: `${title} — Filed` },
+      { slot: 2, dateField: 'secondary_date', timed: false, title: `${title} — Response Due` },
+      { slot: 3, dateField: 'tertiary_date', timed: false, title: `${title} — Reply Due` },
+    ];
+  }
+  if (label === 'Trial') {
+    return [{ slot: 1, dateField: 'event_date', endDateField: 'secondary_date', timed: true, title }];
+  }
+  if (label === 'Court Deadline') {
+    return [{ slot: 1, dateField: 'event_date', timed: false, title }];
+  }
+  // Deposition, Hearing, Status Conference/Pre-Trial, Mediation
+  return [{ slot: 1, dateField: 'event_date', timed: true, title }];
+}
+
+// Combines a plain date string with an optional time (defaults to 9:00 AM
+// when a timed event has no time set) into an ISO datetime the PA flow
+// expects. Assumption: no time set on a timed event still needs *some*
+// time to create a valid calendar entry - worth confirming this default
+// is right once the other 4 flow schemas are shared.
+function toISODateTime(dateStr, timeStr) {
+  if (!dateStr) return null;
+  const time = timeStr || '09:00';
+  return `${dateStr}T${time}:00`;
+}
+function addHoursToTime(timeStr, hours) {
+  const [h, m] = (timeStr || '09:00').split(':').map(Number);
+  const totalMin = h * 60 + m + Math.round((hours || 1) * 60);
+  const newH = Math.floor(totalMin / 60) % 24;
+  const newM = totalMin % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+}
 
 // onChanged: called after any mutation, so the parent Matter page can refresh
 // its Key Deadlines card and info bar star display, which read pin/star flags
@@ -90,7 +140,91 @@ export default function SchedulingTab({ matterId, onChanged }) {
     setEventModalOpen(true);
   }
 
-  async function saveEvent() {
+  // Syncs one calendar slot: creates if no outlook id yet and a date is
+  // present, deletes if the date was cleared, updates if both exist and the
+  // type hasn't flipped, or deletes+recreates if it has (see toggle note
+  // below) - all invisible to the user, who only ever sees one button.
+  async function syncSlot(ev, def, existingOutlookId, lastSyncedAsTimed) {
+    const dateVal = ev[def.dateField];
+
+    if (!dateVal) {
+      if (existingOutlookId) {
+        await fetch('/api/calendar-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', outlookEventId: existingOutlookId }),
+        });
+        return { outlookId: null, lastSyncedAsTimed: def.slot === 1 ? null : lastSyncedAsTimed };
+      }
+      return { outlookId: existingOutlookId, lastSyncedAsTimed };
+    }
+
+    const payload = def.timed
+      ? {
+          allDay: false,
+          title: def.title,
+          startDateTime: toISODateTime(dateVal, ev.event_time),
+          endDateTime: def.endDateField
+            ? toISODateTime(ev[def.endDateField] || dateVal, ev.event_time)
+            : toISODateTime(dateVal, addHoursToTime(ev.event_time, ev.duration_minutes ? ev.duration_minutes / 60 : 1)),
+          location: ev.location || '',
+        }
+      : { allDay: true, title: def.title, date: dateVal };
+
+    // Type flip only meaningfully applies to slot 1 (the only slot that can
+    // ever be a timed type) - Motion/Brief's slots are always all-day.
+    const typeFlipped = def.slot === 1 && lastSyncedAsTimed !== null && lastSyncedAsTimed !== def.timed;
+
+    if (!existingOutlookId || typeFlipped) {
+      if (existingOutlookId) {
+        await fetch('/api/calendar-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', outlookEventId: existingOutlookId }),
+        });
+      }
+      const res = await fetch('/api/calendar-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', allDay: def.timed ? false : true, ...payload }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Calendar create failed');
+      return { outlookId: data.outlookEventId, lastSyncedAsTimed: def.slot === 1 ? def.timed : lastSyncedAsTimed };
+    }
+
+    const res = await fetch('/api/calendar-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update', allDay: def.timed ? false : true, outlookEventId: existingOutlookId, ...payload }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Calendar update failed');
+    return { outlookId: existingOutlookId, lastSyncedAsTimed: def.slot === 1 ? def.timed : lastSyncedAsTimed };
+  }
+
+  // Runs every applicable slot for this event's type, then writes the
+  // resulting outlook_event_id(s) and last_synced_as_timed back to the row.
+  async function syncEventToCalendar(eventRow) {
+    const label = typeLabelFor(eventRow.event_type_id);
+    const defs = getSlotDefs(label, eventRow.description);
+    const updates = {};
+
+    for (const def of defs) {
+      const idField = OUTLOOK_ID_FIELDS[def.slot - 1];
+      const result = await syncSlot(eventRow, def, eventRow[idField], eventRow.last_synced_as_timed);
+      updates[idField] = result.outlookId;
+      if (def.slot === 1) updates.last_synced_as_timed = result.lastSyncedAsTimed;
+    }
+
+    const { error } = await supabase.from('events').update(updates).eq('id', eventRow.id);
+    if (error) throw new Error('Calendar synced, but saving the Outlook link failed: ' + error.message);
+  }
+
+  // sync=true only for the "Sync Calendar" button on an edit. New events
+  // always sync automatically (Create -> Save always triggers the PA flow,
+  // per design). Plain "Save" on an edit never syncs - database only.
+  async function saveEvent(sync = false) {
     if (!eventForm.event_type_id) { alert('Pick an event type.'); return; }
     if (!eventForm.event_date) { alert('Pick a date.'); return; }
     const label = typeLabelFor(eventForm.event_type_id);
@@ -113,21 +247,55 @@ export default function SchedulingTab({ matterId, onChanged }) {
       notes: eventForm.notes?.trim() || null,
       case_people_id: isDeposition ? (eventForm.case_people_id || null) : null,
     };
-    let error;
+
+    let error, savedRow;
     if (editingEventId) {
-      ({ error } = await supabase.from('events').update(payload).eq('id', editingEventId));
+      ({ data: savedRow, error } = await supabase.from('events').update(payload).eq('id', editingEventId).select().single());
     } else {
-      ({ error } = await supabase.from('events').insert(payload));
+      ({ data: savedRow, error } = await supabase.from('events').insert(payload).select().single());
     }
+
+    if (error) {
+      setSavingEvent(false);
+      alert(error.message);
+      return;
+    }
+
+    const shouldSync = sync || !editingEventId; // new event, or explicit Sync Calendar on an edit
+    if (shouldSync) {
+      try {
+        await syncEventToCalendar(savedRow);
+      } catch (syncErr) {
+        alert('Saved, but the calendar sync failed: ' + syncErr.message);
+      }
+    }
+
     setSavingEvent(false);
-    if (error) { alert(error.message); return; }
     setEventModalOpen(false);
     load();
     onChanged?.();
   }
 
   async function removeEvent(id) {
-    if (!confirm('Remove this event?')) return;
+    const ev = events.find((e) => e.id === id);
+    const linkedIds = OUTLOOK_ID_FIELDS.map((f) => ev?.[f]).filter(Boolean);
+    const warning = linkedIds.length > 0
+      ? 'Remove this event? This will also remove it from the calendar.'
+      : 'Remove this event?';
+    if (!confirm(warning)) return;
+
+    for (const outlookEventId of linkedIds) {
+      try {
+        await fetch('/api/calendar-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', outlookEventId }),
+        });
+      } catch {
+        // Best-effort - don't block removing the tracker record over a calendar hiccup.
+      }
+    }
+
     const { error } = await supabase.from('events').delete().eq('id', id);
     if (error) { alert(error.message); return; }
     load();
@@ -383,7 +551,20 @@ export default function SchedulingTab({ matterId, onChanged }) {
                 />
               </div>
               <div className="modal-actions">
-                <button className="btn btn-primary" onClick={saveEvent} disabled={savingEvent}>{savingEvent ? 'Saving…' : editingEventId ? 'Save' : 'Add Event'}</button>
+                {editingEventId ? (
+                  <>
+                    <button className="btn" onClick={() => saveEvent(false)} disabled={savingEvent} title="Saves to the tracker only - does not touch the calendar">
+                      {savingEvent ? 'Saving…' : 'Save'}
+                    </button>
+                    <button className="btn btn-primary" onClick={() => saveEvent(true)} disabled={savingEvent} title="Saves and updates the calendar to match">
+                      {savingEvent ? 'Syncing…' : 'Sync Calendar'}
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-primary" onClick={() => saveEvent(false)} disabled={savingEvent}>
+                    {savingEvent ? 'Saving…' : 'Add Event'}
+                  </button>
+                )}
                 <button className="btn" onClick={() => setEventModalOpen(false)}>Cancel</button>
               </div>
             </div>
