@@ -73,6 +73,16 @@ function addHoursToTime(timeStr, hours) {
   return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
 }
 
+// Postgres `time` columns come back as "HH:MM:SS" once read from the DB,
+// even though the <input type="time"> that produced them only ever sends
+// "HH:MM". toISODateTime blindly appends ":00" assuming HH:MM, so an
+// unnormalized "HH:MM:SS" value produces a malformed "...:00:00" datetime.
+// Slicing to 5 characters normalizes either format to plain HH:MM first.
+function toHHMM(timeStr) {
+  if (!timeStr) return timeStr;
+  return timeStr.slice(0, 5);
+}
+
 // onChanged: called after any mutation, so the parent Matter page can refresh
 // its Key Deadlines card and info bar star display, which read pin/star flags
 // from this same `events` table independently of this component's own state.
@@ -176,10 +186,10 @@ export default function SchedulingTab({ matterId, onChanged }) {
       ? {
           allDay: false,
           title: def.title,
-          startDateTime: toISODateTime(dateVal, ev.event_time),
+          startDateTime: toISODateTime(dateVal, toHHMM(ev.event_time)),
           endDateTime: def.endDateField
-            ? toISODateTime(ev[def.endDateField] || dateVal, ev.event_time)
-            : toISODateTime(dateVal, addHoursToTime(ev.event_time, ev.duration_minutes ? ev.duration_minutes / 60 : 1)),
+            ? toISODateTime(ev[def.endDateField] || dateVal, toHHMM(ev.event_time))
+            : toISODateTime(dateVal, addHoursToTime(toHHMM(ev.event_time), ev.duration_minutes ? ev.duration_minutes / 60 : 1)),
           location: ev.location || '',
         }
       : { allDay: true, title: def.title, date: dateVal };
