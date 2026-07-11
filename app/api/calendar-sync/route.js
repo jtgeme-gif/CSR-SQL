@@ -3,17 +3,16 @@
 // route is the single place that holds them, same pattern as /api/csr.
 //
 // Env vars required (Vercel + .env.local):
-//   PA_CREATE_TIMED_URL   - CONFIRMED, matches the flow you shared
-//   PA_CREATE_ALLDAY_URL  - assumed shape, not yet confirmed against the real flow
-//   PA_UPDATE_TIMED_URL   - assumed shape, not yet confirmed against the real flow
-//   PA_UPDATE_ALLDAY_URL  - assumed shape, not yet confirmed against the real flow
-//   PA_DELETE_URL         - assumed shape, not yet confirmed against the real flow
+//   PA_CREATE_TIMED_URL   - CONFIRMED (depositionId, title, startDateTime, endDateTime, location)
+//   PA_CREATE_ALLDAY_URL  - CONFIRMED (discoveryId, title, eventDate, location)
+//   PA_UPDATE_TIMED_URL   - CONFIRMED (depositionId, title, startDateTime, endDateTime, location, outlookEventId)
+//   PA_UPDATE_ALLDAY_URL  - CONFIRMED (discoveryId, title, eventDate, location, outlookEventId)
+//   PA_DELETE_URL         - CONFIRMED (outlookEventId only)
 //
-// Only PA_CREATE_TIMED_URL's payload shape is confirmed from the real flow
-// (field literally named "depositionId" despite being reused for every timed
-// type - kept as-is here since that's what the live flow's trigger schema
-// expects). The other four are built from the same assumed pattern and will
-// need adjusting once their actual trigger schemas are shared.
+// All 5 payload shapes are now confirmed against their real trigger schemas.
+// Every Create flow reuses a type-specific "id" field name (depositionId,
+// discoveryId) regardless of the actual event type - both Update flows and
+// Delete use an honestly-named outlookEventId.
 
 const PA_CREATE_TIMED_URL = process.env.PA_CREATE_TIMED_URL;
 const PA_CREATE_ALLDAY_URL = process.env.PA_CREATE_ALLDAY_URL;
@@ -57,17 +56,21 @@ export async function POST(request) {
         return Response.json({ success: true, skipped: true });
       }
       checkConfigured(PA_DELETE_URL, 'PA_DELETE_URL');
-      await callFlow(PA_DELETE_URL, { eventId: outlookEventId });
+      // Confirmed from the real flow's trigger schema: just outlookEventId, nothing else.
+      await callFlow(PA_DELETE_URL, { outlookEventId });
       return Response.json({ success: true });
     }
 
     if (action === 'create') {
       if (allDay) {
         checkConfigured(PA_CREATE_ALLDAY_URL, 'PA_CREATE_ALLDAY_URL');
+        // Confirmed from the real flow's trigger schema: discoveryId (generic
+        // id field, same reused-name pattern as depositionId), title, eventDate, location.
         const result = await callFlow(PA_CREATE_ALLDAY_URL, {
-          eventId: null, // matches Create Timed's pattern (generic id field, not used by PA - here for shape consistency)
+          discoveryId: null,
           title,
-          date,
+          eventDate: date,
+          location: location || '',
         });
         return Response.json({ success: true, outlookEventId: result.eventId });
       } else {
@@ -91,16 +94,27 @@ export async function POST(request) {
       }
       if (allDay) {
         checkConfigured(PA_UPDATE_ALLDAY_URL, 'PA_UPDATE_ALLDAY_URL');
-        await callFlow(PA_UPDATE_ALLDAY_URL, { eventId: outlookEventId, title, date });
+        // Confirmed from the real flow's trigger schema: discoveryId, title, eventDate, location, outlookEventId.
+        await callFlow(PA_UPDATE_ALLDAY_URL, {
+          discoveryId: null,
+          title,
+          eventDate: date,
+          location: location || '',
+          outlookEventId,
+        });
         return Response.json({ success: true, outlookEventId });
       } else {
         checkConfigured(PA_UPDATE_TIMED_URL, 'PA_UPDATE_TIMED_URL');
+        // Confirmed from the real flow's trigger schema: depositionId (generic
+        // id field, same reused-name pattern as Create Timed), title,
+        // startDateTime, endDateTime, location, outlookEventId.
         await callFlow(PA_UPDATE_TIMED_URL, {
-          eventId: outlookEventId,
+          depositionId: null,
           title,
           startDateTime,
           endDateTime,
           location: location || '',
+          outlookEventId,
         });
         return Response.json({ success: true, outlookEventId });
       }
