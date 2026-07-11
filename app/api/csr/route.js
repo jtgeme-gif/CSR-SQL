@@ -141,7 +141,8 @@ export async function POST(request) {
     const { caseName, practiceGroup, fileNumber, dateOpened } = body;
 
     if (!caseName || !dateOpened) {
-      return Response.json({ error: 'caseName and dateOpened are required' }, { status: 400 });
+      const missing = [!caseName && 'caseName', !dateOpened && 'dateOpened'].filter(Boolean).join(', ');
+      return Response.json({ error: `Missing required field(s): ${missing}` }, { status: 400 });
     }
 
     const token = await getAccessToken();
