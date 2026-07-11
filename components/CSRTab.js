@@ -211,11 +211,26 @@ export default function CSRTab({ matter, onLinked }) {
 
   const overdue = csr.nextDue && new Date(csr.nextDue) < new Date();
 
+  function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    const target = new Date(dateStr);
+    const today = new Date();
+    const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return Math.round((targetMidnight - todayMidnight) / 86400000);
+  }
+
+  const daysOut = daysUntil(csr.nextDue);
+  const csrHeaderLabel =
+    daysOut === null ? 'Case Status Report'
+    : daysOut < 0 ? `Case Status Report Overdue: ${Math.abs(daysOut)} days`
+    : `Case Status Report Due: ${daysOut} days`;
+
   return (
     <>
       <div className="section-card">
         <div className="section-card-header">
-          <h3>CSR</h3>
+          <h3>{csrHeaderLabel}</h3>
           <button className="btn btn-primary" onClick={openSubmitModal}>Submit CSR</button>
         </div>
         <div className="detail-grid">

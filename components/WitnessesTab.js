@@ -222,7 +222,7 @@ export default function WitnessesTab({ matterId }) {
                 </select>
               </div>
               <div className="form-field">
-                <label>Party</label>
+                <label>Deposition Noticed By</label>
                 <select value={editForm.party} onChange={(e) => setEditForm((f) => ({ ...f, party: e.target.value }))}>
                   {PARTIES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
                 </select>
@@ -347,7 +347,7 @@ export default function WitnessesTab({ matterId }) {
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <span className="muted" style={{ fontSize: '13px' }}>View by:</span>
           <button className={`btn-small ${viewBy === 'type' ? 'btn-primary' : ''}`} onClick={() => setViewBy('type')}>Type</button>
-          <button className={`btn-small ${viewBy === 'party' ? 'btn-primary' : ''}`} onClick={() => setViewBy('party')}>Party</button>
+          <button className={`btn-small ${viewBy === 'party' ? 'btn-primary' : ''}`} onClick={() => setViewBy('party')}>Deposition Noticed By</button>
         </div>
       </div>
 
@@ -391,7 +391,7 @@ export default function WitnessesTab({ matterId }) {
                   </div>
                 )}
                 <div className="form-field">
-                  <label>Party</label>
+                  <label>Deposition Noticed By</label>
                   <select value={addForm.party} onChange={(e) => setAddForm((f) => ({ ...f, party: e.target.value }))}>
                     {PARTIES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
                   </select>

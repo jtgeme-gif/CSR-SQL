@@ -149,9 +149,6 @@ export default function MatterDetailPage() {
     if (error) { alert(error.message); return; }
     load();
   }
-  async function updateAppellateNumber(value) {
-    await supabase.from('matters').update({ appellate_case_number: value || null }).eq('id', matterId);
-  }
 
   async function toggleStar() {
     const { error } = await supabase.from('matters').update({ starred: !matter.starred }).eq('id', matterId);
@@ -252,6 +249,7 @@ export default function MatterDetailPage() {
     setSavingCourt(true);
     const payload = {
       court_case_number: courtForm.court_case_number?.trim() || null,
+      appellate_case_number: matter.case_status === 'Appeal' ? (courtForm.appellate_case_number?.trim() || null) : null,
       court_level: courtForm.court_level?.trim() || null,
       court_jurisdiction: courtForm.court_jurisdiction?.trim() || null,
       circuit_county_division: courtForm.circuit_county_division?.trim() || null,
@@ -733,12 +731,6 @@ export default function MatterDetailPage() {
                 {CASE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            {matter.case_status === 'Appeal' && (
-              <div className="form-field" style={{ maxWidth: '280px' }}>
-                <label>Appellate Case Number</label>
-                <input defaultValue={matter.appellate_case_number || ''} onBlur={(e) => updateAppellateNumber(e.target.value)} />
-              </div>
-            )}
           </>
         )}
 
@@ -840,7 +832,18 @@ export default function MatterDetailPage() {
             <div className="detail-card"><span className="detail-label">Court Level</span><span className="detail-value">{matter.court_level || '—'}</span></div>
             <div className="detail-card"><span className="detail-label">Court Jurisdiction</span><span className="detail-value">{matter.court_jurisdiction || '—'}</span></div>
             <div className="detail-card"><span className="detail-label">Circuit/County/Division</span><span className="detail-value">{matter.circuit_county_division || '—'}</span></div>
-            <div className="detail-card"><span className="detail-label">Case Number</span><span className="detail-value">{matter.court_case_number || '—'}</span></div>
+            <div className="detail-card" style={{ display: 'flex', gap: '0', padding: 0, overflow: 'hidden' }}>
+              <div style={{ flex: 1, padding: '10px 14px' }}>
+                <span className="detail-label">Case Number</span>
+                <span className="detail-value" style={{ display: 'block' }}>{matter.court_case_number || '—'}</span>
+              </div>
+              {matter.case_status === 'Appeal' && (
+                <div style={{ flex: 1, padding: '10px 14px', borderLeft: '1px solid var(--border)' }}>
+                  <span className="detail-label">Appellate Case Number</span>
+                  <span className="detail-value" style={{ display: 'block' }}>{matter.appellate_case_number || '—'}</span>
+                </div>
+              )}
+            </div>
             <div className="detail-card"><span className="detail-label">Date Filed</span><span className="detail-value">{matter.date_filed ? formatDateSafe(matter.date_filed) : '—'}</span></div>
             <div className="detail-card"><span className="detail-label">Date Client Served</span><span className="detail-value">{matter.date_client_served ? formatDateSafe(matter.date_client_served) : '—'}</span></div>
           </div>
@@ -863,8 +866,18 @@ export default function MatterDetailPage() {
                 <input value={courtForm.circuit_county_division || ''} onChange={(e) => updateCourt('circuit_county_division', e.target.value)} />
               </div>
               <div className="form-field">
-                <label>Case Number</label>
-                <input value={courtForm.court_case_number || ''} onChange={(e) => updateCourt('court_case_number', e.target.value)} />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label>Case Number</label>
+                    <input value={courtForm.court_case_number || ''} onChange={(e) => updateCourt('court_case_number', e.target.value)} />
+                  </div>
+                  {matter.case_status === 'Appeal' && (
+                    <div style={{ flex: 1 }}>
+                      <label>Appellate Case Number</label>
+                      <input value={courtForm.appellate_case_number || ''} onChange={(e) => updateCourt('appellate_case_number', e.target.value)} />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="form-row">
