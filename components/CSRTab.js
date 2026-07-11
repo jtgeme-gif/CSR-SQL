@@ -28,7 +28,6 @@ export default function CSRTab({ matter, onLinked }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [csr, setCsr] = useState(null);
-  const [diagnostics, setDiagnostics] = useState(null);
 
   const [creating, setCreating] = useState(false);
   const [linkIdDraft, setLinkIdDraft] = useState('');
@@ -50,7 +49,6 @@ export default function CSRTab({ matter, onLinked }) {
   async function load() {
     setLoading(true);
     setError(null);
-    setDiagnostics(null);
     try {
       const url = matter.csr_item_id
         ? `/api/csr?itemId=${encodeURIComponent(matter.csr_item_id)}`
@@ -63,7 +61,6 @@ export default function CSRTab({ matter, onLinked }) {
       const data = await res.json();
       if (data?.noMatch) {
         setCsr(null);
-        setDiagnostics(data);
       } else {
         setCsr(data);
       }
@@ -199,18 +196,6 @@ export default function CSRTab({ matter, onLinked }) {
             <p className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>Use this if this matter already exists in the CSR Tracker.</p>
           </div>
         </div>
-
-        {diagnostics && (
-          <div style={{ marginTop: '16px', fontSize: '12px' }}>
-            <div><strong>Searched for:</strong> "{diagnostics.searchedFor}" ({diagnostics.searchedForLength} characters)</div>
-            <div style={{ marginTop: '8px' }}><strong>Values found in the CSR Tracker's Title column:</strong></div>
-            <ul>
-              {(diagnostics.existingValues || []).map((v, i) => (
-                <li key={i}>"{v}" ({v.length} characters)</li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     );
   }

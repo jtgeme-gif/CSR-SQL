@@ -13,6 +13,7 @@ const BLANK_FORM = {
   first_name: '', middle_name: '', last_name: '', title: '',
   identity: 'Individual',
   entity_id: null, entity_name: '',
+  department: '',
   address: '', city: '', state: '', zip: '',
   phone1: '', phone1_label: '', phone2: '', phone2_label: '',
   email1: '', email1_label: '', email2: '', email2_label: '',
@@ -123,6 +124,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
       title: form.title?.trim() || null,
       identity: form.identity,
       entity_id: form.entity_id,
+      department: form.department?.trim() || null,
       address: form.address?.trim() || null,
       city: form.city?.trim() || null,
       state: form.state?.trim() || null,
@@ -210,6 +212,7 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
               <div className="detail-card"><span className="detail-label">Identity</span><span className="detail-value">{person.identity}</span></div>
               <div className="detail-card"><span className="detail-label">Title</span><span className="detail-value">{person.title || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Entity</span><span className="detail-value">{person.entities?.name || '—'}</span></div>
+              <div className="detail-card"><span className="detail-label">Department</span><span className="detail-value">{person.department || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Mediator</span><span className="detail-value">{person.mediator ? 'Yes' : 'No'}</span></div>
               <div className="detail-card"><span className="detail-label">Expert</span><span className="detail-value">{person.expert ? 'Yes' : 'No'}</span></div>
               <div className="detail-card"><span className="detail-label">{person.phone1_label || 'Phone 1'}</span><span className="detail-value">{formatPhoneDisplay(person.phone1) || '—'}</span></div>
@@ -259,6 +262,10 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
             <div className="form-field">
               <label>Entity</label>
               <EntityPicker value={form.entity_id} valueName={form.entity_name} onChange={handleEntityChange} />
+            </div>
+            <div className="form-field">
+              <label>Department</label>
+              <input value={form.department || ''} onChange={(e) => update('department', e.target.value)} placeholder="e.g. Police Department, City Attorney's Office" />
             </div>
             {form.identity === 'Judge' && (
               <div className="form-row">
