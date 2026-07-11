@@ -28,6 +28,22 @@ function toDateOnly(dateStr) {
   return dateStr.slice(0, 10);
 }
 
+// Rare multi-file-number matters are stored as "1979.1807 (Hancock) /
+// 1979.1810 (Houghton)" - split on "/" so each number stacks on its own
+// line instead of running together. Single-number matters render unchanged.
+function renderFileNumber(fileNumber) {
+  if (!fileNumber) return '—';
+  const parts = fileNumber.split('/').map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return fileNumber;
+  return (
+    <>
+      {parts.map((p, i) => (
+        <div key={i}>{p}</div>
+      ))}
+    </>
+  );
+}
+
 // 1-10 days = urgent (orange), 11-20 = moderate (yellow), 21+ = calm (green).
 // The color follows whatever number is actually chosen, not the box's position.
 function colorForWindow(days) {
@@ -362,7 +378,7 @@ export default function DashboardPage() {
                 return (
                   <tr key={m.id}>
                     <td><Link href={`/matters/${m.id}`}>{m.case_name}</Link></td>
-                    <td>{m.file_number || '—'}</td>
+                    <td>{renderFileNumber(m.file_number)}</td>
                     <td>
                       <span className={`badge badge-${STATUS_BADGE_COLOR[m.case_status] || 'gray'}`}>
                         {m.case_status || '—'}
