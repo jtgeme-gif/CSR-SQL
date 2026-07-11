@@ -3,16 +3,18 @@
 // route is the single place that holds them, same pattern as /api/csr.
 //
 // Env vars required (Vercel + .env.local):
-//   PA_CREATE_TIMED_URL   - CONFIRMED (depositionId, title, startDateTime, endDateTime, location)
+//   PA_CREATE_TIMED_URL   - CONFIRMED (title, startDateTime, endDateTime, location, notes)
 //   PA_CREATE_ALLDAY_URL  - CONFIRMED (discoveryId, title, eventDate, location)
-//   PA_UPDATE_TIMED_URL   - CONFIRMED (depositionId, title, startDateTime, endDateTime, location, outlookEventId)
+//   PA_UPDATE_TIMED_URL   - CONFIRMED (title, startDateTime, endDateTime, location, outlookEventId, notes)
 //   PA_UPDATE_ALLDAY_URL  - CONFIRMED (discoveryId, title, eventDate, location, outlookEventId)
 //   PA_DELETE_URL         - CONFIRMED (outlookEventId only)
 //
-// All 5 payload shapes are now confirmed against their real trigger schemas.
-// Every Create flow reuses a type-specific "id" field name (depositionId,
-// discoveryId) regardless of the actual event type - both Update flows and
-// Delete use an honestly-named outlookEventId.
+// depositionId was a dead placeholder field, never used inside either timed
+// flow - removed from both trigger schemas entirely, along with the code
+// that used to send it. notes was added to both timed flows' schemas and
+// wired to the Outlook event's Body field, carrying Virtual Meeting Info
+// (Zoom/Teams links, dial-in numbers) - all-day types never have this field
+// in NMT, so the two all-day flows were left untouched.
 
 const PA_CREATE_TIMED_URL = process.env.PA_CREATE_TIMED_URL;
 const PA_CREATE_ALLDAY_URL = process.env.PA_CREATE_ALLDAY_URL;
@@ -46,7 +48,7 @@ async function callFlow(url, body) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { action, allDay, outlookEventId, title, startDateTime, endDateTime, date, location } = body;
+    const { action, allDay, outlookEventId, title, startDateTime, endDateTime, date, location, notes } = body;
 
     if (!action) return Response.json({ error: 'action is required' }, { status: 400 });
 
@@ -74,13 +76,12 @@ export async function POST(request) {
         return Response.json({ success: true, outlookEventId: result.eventId });
       } else {
         checkConfigured(PA_CREATE_TIMED_URL, 'PA_CREATE_TIMED_URL');
-        // Field is literally named "depositionId" in the live flow's trigger
-        // schema, reused for every timed type - not just depositions.
         const result = await callFlow(PA_CREATE_TIMED_URL, {
           title,
           startDateTime,
           endDateTime,
           location: location || '',
+          notes: notes || '',
         });
         return Response.json({ success: true, outlookEventId: result.eventId });
       }
@@ -102,15 +103,15 @@ export async function POST(request) {
         return Response.json({ success: true, outlookEventId });
       } else {
         checkConfigured(PA_UPDATE_TIMED_URL, 'PA_UPDATE_TIMED_URL');
-        // Confirmed from the real flow's trigger schema: depositionId (generic
-        // id field, same reused-name pattern as Create Timed), title,
-        // startDateTime, endDateTime, location, outlookEventId.
+        // Confirmed from the real flow's trigger schema: title, startDateTime,
+        // endDateTime, location, outlookEventId, notes.
         await callFlow(PA_UPDATE_TIMED_URL, {
           title,
           startDateTime,
           endDateTime,
           location: location || '',
           outlookEventId,
+          notes: notes || '',
         });
         return Response.json({ success: true, outlookEventId });
       }

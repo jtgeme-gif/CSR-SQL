@@ -95,12 +95,13 @@ export default function SchedulingTab({ matterId, onChanged }) {
   const [frameSort, setFrameSort] = useState({ 'Court Dates & Deadlines': 'date', 'Discovery & Depositions': 'date', 'Motions & Briefs': 'date' });
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '', case_people_id: null, case_people_name: '' });
+  const [eventForm, setEventForm] = useState({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', virtual_meeting_info: '', notes: '', case_people_id: null, case_people_name: '' });
   const [savingEvent, setSavingEvent] = useState(false);
   const [multiModalOpen, setMultiModalOpen] = useState(false);
   const [multiRows, setMultiRows] = useState([{ title: '', date: '' }, { title: '', date: '' }]);
   const [savingMulti, setSavingMulti] = useState(false);
   const [viewEventId, setViewEventId] = useState(null);
+  const [connectionModalEventId, setConnectionModalEventId] = useState(null);
 
   useEffect(() => {
     load();
@@ -133,7 +134,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
 
   function openAddEvent() {
     setEditingEventId(null);
-    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '', case_people_id: null, case_people_name: '' });
+    setEventForm({ event_type_id: '', description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', virtual_meeting_info: '', notes: '', case_people_id: null, case_people_name: '' });
     setEventModalOpen(true);
   }
 
@@ -141,7 +142,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
     const depType = eventTypes.find((t) => t.label === 'Deposition');
     if (!depType) { alert('Deposition event type not found — check the migration ran.'); return; }
     setEditingEventId(null);
-    setEventForm({ event_type_id: depType.id, description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', notes: '', case_people_id: null, case_people_name: '' });
+    setEventForm({ event_type_id: depType.id, description: '', event_date: '', secondary_date: '', tertiary_date: '', event_time: '', duration_hours: '', location: '', virtual_meeting_info: '', notes: '', case_people_id: null, case_people_name: '' });
     setEventModalOpen(true);
   }
 
@@ -156,6 +157,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
       event_time: ev.event_time || '',
       duration_hours: ev.duration_minutes ? String(ev.duration_minutes / 60) : '',
       location: ev.location || '',
+      virtual_meeting_info: ev.virtual_meeting_info || '',
       notes: ev.notes || '',
       case_people_id: ev.case_people_id || null,
       case_people_name: ev.case_people?.people ? `${ev.case_people.people.first_name || ''} ${ev.case_people.people.last_name || ''}`.trim() : '',
@@ -191,6 +193,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
             ? toISODateTime(ev[def.endDateField] || dateVal, toHHMM(ev.event_time))
             : toISODateTime(dateVal, addHoursToTime(toHHMM(ev.event_time), ev.duration_minutes ? ev.duration_minutes / 60 : 1)),
           location: ev.location || '',
+          notes: ev.virtual_meeting_info || '',
         }
       : { allDay: true, title: def.title, date: dateVal };
 
@@ -267,6 +270,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
       event_time: cfg.timed && eventForm.event_time ? eventForm.event_time : null,
       duration_minutes: cfg.timed && eventForm.duration_hours ? Math.round(parseFloat(eventForm.duration_hours) * 60) : null,
       location: cfg.hasLocation ? (eventForm.location?.trim() || null) : null,
+      virtual_meeting_info: cfg.hasLocation ? (eventForm.virtual_meeting_info?.trim() || null) : null,
       notes: eventForm.notes?.trim() || null,
       case_people_id: isDeposition ? (eventForm.case_people_id || null) : null,
     };
@@ -417,6 +421,22 @@ export default function SchedulingTab({ matterId, onChanged }) {
     return 'badge-gray';
   }
 
+  // Turns a pasted block of text (Zoom/Teams invite, dial-in numbers, etc.)
+  // into React content with any URLs made clickable, everything else left
+  // as plain text. Line breaks are preserved by the caller via
+  // white-space: pre-wrap on the containing element - this function only
+  // needs to split out the links themselves.
+  function linkify(text) {
+    if (!text) return null;
+    const urlPattern = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlPattern);
+    return parts.map((part, i) =>
+      /^https?:\/\//i.test(part)
+        ? <a key={i} href={part} target="_blank" rel="noopener noreferrer">{part}</a>
+        : part
+    );
+  }
+
   function renderEventRow(ev) {
     const label = ev.event_types?.label;
     const cfg = EVENT_TYPE_CONFIG[label] || { dateLabels: ['Date'], timed: false, hasLocation: false };
@@ -442,6 +462,11 @@ export default function SchedulingTab({ matterId, onChanged }) {
               </span>
             )}
           </div>
+          {cfg.hasLocation && ev.virtual_meeting_info && (
+            <button className="btn-small" style={{ alignSelf: 'flex-start', marginTop: '2px' }} onClick={() => setConnectionModalEventId(ev.id)}>
+              Connection Details
+            </button>
+          )}
           {cfg.hasLocation && ev.location && (
             <a href={locationLink(ev.location)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px' }}>{ev.location}</a>
           )}
@@ -552,11 +577,23 @@ export default function SchedulingTab({ matterId, onChanged }) {
                     )}
                     {cfg.hasLocation && (
                       <div className="form-field">
-                        <label>Location / Meeting Info</label>
+                        <label>Location</label>
                         <input
                           value={eventForm.location}
                           onChange={(e) => setEventForm((f) => ({ ...f, location: e.target.value }))}
-                          placeholder="Address, Zoom link, or dial-in info"
+                          placeholder="Physical address, e.g. 113 Federal Bldg, 315 W Allegan St"
+                        />
+                      </div>
+                    )}
+                    {cfg.hasLocation && (
+                      <div className="form-field">
+                        <label>Virtual Meeting Info</label>
+                        <textarea
+                          rows={4}
+                          value={eventForm.virtual_meeting_info}
+                          onChange={(e) => setEventForm((f) => ({ ...f, virtual_meeting_info: e.target.value }))}
+                          placeholder="Paste the full Zoom/Teams invite block here — link, passcode, dial-in numbers, all of it"
+                          style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
                         />
                       </div>
                     )}
@@ -646,10 +683,16 @@ export default function SchedulingTab({ matterId, onChanged }) {
                   </div>
                   {cfg.hasLocation && (
                     <div className="detail-card">
-                      <span className="detail-label">Location / Meeting Info</span>
+                      <span className="detail-label">Location</span>
                       <span className="detail-value">
                         {ev.location ? <a href={locationLink(ev.location)} target="_blank" rel="noopener noreferrer">{ev.location}</a> : '—'}
                       </span>
+                    </div>
+                  )}
+                  {cfg.hasLocation && ev.virtual_meeting_info && (
+                    <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
+                      <span className="detail-label">Virtual Meeting Info</span>
+                      <span className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{linkify(ev.virtual_meeting_info)}</span>
                     </div>
                   )}
                   <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
@@ -660,6 +703,28 @@ export default function SchedulingTab({ matterId, onChanged }) {
                 <div className="modal-actions">
                   <button className="btn btn-primary" onClick={() => { setViewEventId(null); openEditEvent(ev); }}>Edit</button>
                   <button className="btn" onClick={() => setViewEventId(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {connectionModalEventId && (() => {
+        const ev = events.find((e) => e.id === connectionModalEventId);
+        if (!ev) return null;
+        return (
+          <div className="modal-overlay" onClick={() => setConnectionModalEventId(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Connection Details — {ev.description || 'Event'}</h2>
+                <button className="modal-close" onClick={() => setConnectionModalEventId(null)}>×</button>
+              </div>
+              <div className="modal-body">
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: '13px', lineHeight: 1.5 }}>
+                  {linkify(ev.virtual_meeting_info)}
+                </div>
+                <div className="modal-actions">
+                  <button className="btn" onClick={() => setConnectionModalEventId(null)}>Close</button>
                 </div>
               </div>
             </div>
