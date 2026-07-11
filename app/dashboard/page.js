@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '../lib/supabaseClient';
-import { formatDateSafe } from '../lib/formatDate';
+import { supabase } from '../../lib/supabaseClient';
+import { formatDateSafe } from '../../lib/formatDate';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
