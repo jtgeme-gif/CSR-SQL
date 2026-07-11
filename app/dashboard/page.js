@@ -27,12 +27,30 @@ function colorForWindow(days) {
   return 'green';
 }
 
+// Days-out badge for the deadline/CSR tables: overdue and "due today" both
+// read as urgent (red), same visual language as the OMT reference screenshot.
+function daysOutBadge(days) {
+  if (days < 0) return { colorClass: 'red', label: `Overdue ${Math.abs(days)}d` };
+  if (days === 0) return { colorClass: 'red', label: '0d' };
+  return { colorClass: colorForWindow(days), label: `${days}d` };
+}
+
 const OVERDUE_CAP_DAYS = 45;
+const CASE_STATUS_ORDER = ['Active Litigation', 'Stayed', 'Appeal', 'Pre-litigation Monitoring'];
+const STATUS_BADGE_COLOR = {
+  'Active Litigation': 'blue',
+  'Pre-litigation Monitoring': 'yellow',
+  'Stayed': 'orange',
+  'Appeal': 'purple',
+};
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [events, setEvents] = useState([]);
+  const [matters, setMatters] = useState([]); // assigned matters: id, case_name, file_number, case_status, csr_item_id
+  const [csrRows, setCsrRows] = useState([]); // next 5 upcoming CSR dues
+  const [csrLoading, setCsrLoading] = useState(true);
   const [daysWindow1, setDaysWindow1] = useState('5');
   const [daysWindow2, setDaysWindow2] = useState('14');
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -53,6 +71,9 @@ export default function DashboardPage() {
       const { data: staffRow } = await supabase.from('staff').select('id').eq('email', email).maybeSingle();
       if (!staffRow) {
         setEvents([]);
+        setMatters([]);
+        setCsrRows([]);
+        setCsrLoading(false);
         setLoading(false);
         return;
       }
@@ -61,6 +82,12 @@ export default function DashboardPage() {
       const matterIds = [...new Set((assignments || []).map((a) => a.matter_id))];
 
       if (matterIds.length > 0) {
+        const { data: mattersData } = await supabase
+          .from('matters')
+          .select('id, case_name, file_number, case_status, csr_item_id')
+          .in('id', matterIds);
+        setMatters(mattersData || []);
+
         const { data: eventsData } = await supabase
           .from('events')
           .select('*, event_types(label), matters(case_name)')
@@ -68,8 +95,13 @@ export default function DashboardPage() {
           .eq('completed', false)
           .order('event_date');
         setEvents(eventsData || []);
+
+        loadCsrDues(mattersData || []);
       } else {
+        setMatters([]);
         setEvents([]);
+        setCsrRows([]);
+        setCsrLoading(false);
       }
 
       // Load or create this user's saved day-count preferences.
@@ -84,6 +116,43 @@ export default function DashboardPage() {
       setError(err.message);
     }
     setLoading(false);
+  }
+
+  // CSR dates live only in SharePoint, not in `events` - pulled per-matter via
+  // the existing /api/csr route (same one CSRTab uses), then merged client-side
+  // to find the 5 soonest upcoming due dates across assigned matters.
+  async function loadCsrDues(matterList) {
+    setCsrLoading(true);
+    const linked = matterList.filter((m) => m.csr_item_id);
+    if (linked.length === 0) {
+      setCsrRows([]);
+      setCsrLoading(false);
+      return;
+    }
+
+    const results = await Promise.all(
+      linked.map(async (m) => {
+        try {
+          const res = await fetch(`/api/csr?itemId=${encodeURIComponent(m.csr_item_id)}`);
+          if (!res.ok) return null;
+          const data = await res.json();
+          if (data?.error || data?.noMatch || !data?.nextDue || data?.closed) return null;
+          return { matterId: m.id, caseName: m.case_name, nextDue: data.nextDue };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const today = todayStr();
+    const upcoming = results
+      .filter(Boolean)
+      .filter((r) => r.nextDue >= today)
+      .sort((a, b) => (a.nextDue < b.nextDue ? -1 : a.nextDue > b.nextDue ? 1 : 0))
+      .slice(0, 5);
+
+    setCsrRows(upcoming);
+    setCsrLoading(false);
   }
 
   async function savePref(field, value) {
@@ -116,6 +185,40 @@ export default function DashboardPage() {
   const dueWithin2 = !isNaN(window2) && window2 >= 1 && window2 <= 90
     ? events.filter((e) => e.event_date >= today && e.event_date <= addDays(today, window2))
     : [];
+
+  // Open Matters breakdown - counts by case_status, Closed excluded entirely.
+  const openMatters = matters.filter((m) => m.case_status !== 'Closed');
+  const statusCounts = CASE_STATUS_ORDER.map((status) => ({
+    status,
+    count: openMatters.filter((m) => m.case_status === status).length,
+  }));
+
+  // Soonest incomplete event per matter (events already ordered ascending by
+  // event_date, so the first row seen for a given matter_id is its next
+  // deadline). CSR dates never appear here - CSR lives only in its own panel.
+  const nextDeadlineByMatter = {};
+  events.forEach((e) => {
+    if (!nextDeadlineByMatter[e.matter_id]) {
+      nextDeadlineByMatter[e.matter_id] = e;
+    }
+  });
+
+  const tableRows = openMatters
+    .map((m) => {
+      const next = nextDeadlineByMatter[m.id];
+      return {
+        ...m,
+        nextDeadlineLabel: next ? (next.description || next.event_types?.label || '—') : null,
+        nextDeadlineDate: next ? next.event_date : null,
+        daysOut: next ? daysBetween(today, next.event_date) : null,
+      };
+    })
+    .sort((a, b) => {
+      if (a.daysOut === null && b.daysOut === null) return 0;
+      if (a.daysOut === null) return 1;
+      if (b.daysOut === null) return -1;
+      return a.daysOut - b.daysOut;
+    });
 
   function renderAlertBox({ title, count, colorClass, list, extra }) {
     return (
@@ -151,7 +254,7 @@ export default function DashboardPage() {
 
       {error && <div className="error-box">{error}</div>}
 
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch', marginBottom: '16px' }}>
         {renderAlertBox({
           title: 'Overdue',
           count: overdue.length,
@@ -189,6 +292,81 @@ export default function DashboardPage() {
             />
           ),
         })}
+      </div>
+
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch', marginBottom: '16px' }}>
+        {/* CSR Status - next 5 soonest upcoming CSR due dates, own data source */}
+        <div className="section-card" style={{ flex: 1 }}>
+          <div className="section-card-header">
+            <h3>CSR Status</h3>
+          </div>
+          {csrLoading && <p className="muted" style={{ fontSize: '13px' }}>Loading…</p>}
+          {!csrLoading && csrRows.length === 0 && <p className="muted" style={{ fontSize: '13px' }}>Nothing upcoming.</p>}
+          {!csrLoading && csrRows.map((r) => {
+            const days = daysBetween(today, r.nextDue);
+            const badge = daysOutBadge(days);
+            return (
+              <div key={r.matterId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                <Link href={`/matters/${r.matterId}`} style={{ fontWeight: 600, fontSize: '13px' }}>{r.caseName}</Link>
+                <span className={`badge badge-${badge.colorClass}`}>{badge.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Open Matters breakdown by case_status */}
+        <div className="section-card" style={{ flex: 1 }}>
+          <div className="section-card-header">
+            <h3>Open Matters — {openMatters.length}</h3>
+          </div>
+          {statusCounts.map(({ status, count }) => (
+            <div key={status} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '13px' }}>{status}</span>
+              <span className={`badge badge-${STATUS_BADGE_COLOR[status]}`}>{count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Open Matters table, sorted by soonest next deadline. CSR dates never
+          appear here - CSR lives only in its own panel above. */}
+      <div className="section-card">
+        <div className="section-card-header">
+          <h3>Open Matters — Sorted by Next Deadline</h3>
+          <span className="muted" style={{ fontSize: '12px' }}>{tableRows.length} matters</span>
+        </div>
+        {tableRows.length === 0 && <p className="muted" style={{ fontSize: '13px' }}>No open matters assigned to you.</p>}
+        {tableRows.length > 0 && (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>File #</th>
+                <th>Case Name</th>
+                <th>Status</th>
+                <th>Next Deadline</th>
+                <th>Days Out</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((m) => {
+                const badge = m.daysOut !== null ? daysOutBadge(m.daysOut) : null;
+                return (
+                  <tr key={m.id}>
+                    <td>{m.file_number || '—'}</td>
+                    <td><Link href={`/matters/${m.id}`}>{m.case_name}</Link></td>
+                    <td>
+                      <span className={`badge badge-${STATUS_BADGE_COLOR[m.case_status] || 'gray'}`}>
+                        {m.case_status || '—'}
+                      </span>
+                    </td>
+                    <td>{m.nextDeadlineLabel || '—'}</td>
+                    <td>{badge ? <span className={`badge badge-${badge.colorClass}`}>{badge.label}</span> : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
