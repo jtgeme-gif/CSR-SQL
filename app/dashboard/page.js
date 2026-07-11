@@ -19,6 +19,15 @@ function daysBetween(fromStr, toStr) {
   return Math.round((b - a) / 86400000);
 }
 
+// SharePoint date fields (like CSR's Next CSR Due) come back as full ISO
+// timestamps (e.g. "2026-08-15T00:00:00Z"), not plain "YYYY-MM-DD" like
+// Postgres date columns. Slicing to the first 10 characters normalizes
+// either format to plain YYYY-MM-DD before it touches daysBetween/addDays.
+function toDateOnly(dateStr) {
+  if (!dateStr) return null;
+  return dateStr.slice(0, 10);
+}
+
 // 1-10 days = urgent (orange), 11-20 = moderate (yellow), 21+ = calm (green).
 // The color follows whatever number is actually chosen, not the box's position.
 function colorForWindow(days) {
@@ -137,7 +146,7 @@ export default function DashboardPage() {
           if (!res.ok) return null;
           const data = await res.json();
           if (data?.error || data?.noMatch || !data?.nextDue || data?.closed) return null;
-          return { matterId: m.id, caseName: m.case_name, nextDue: data.nextDue };
+          return { matterId: m.id, caseName: m.case_name, nextDue: toDateOnly(data.nextDue) };
         } catch {
           return null;
         }
@@ -340,8 +349,8 @@ export default function DashboardPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>File #</th>
                 <th>Case Name</th>
+                <th>File #</th>
                 <th>Status</th>
                 <th>Next Deadline</th>
                 <th>Days Out</th>
@@ -352,8 +361,8 @@ export default function DashboardPage() {
                 const badge = m.daysOut !== null ? daysOutBadge(m.daysOut) : null;
                 return (
                   <tr key={m.id}>
-                    <td>{m.file_number || '—'}</td>
                     <td><Link href={`/matters/${m.id}`}>{m.case_name}</Link></td>
+                    <td>{m.file_number || '—'}</td>
                     <td>
                       <span className={`badge badge-${STATUS_BADGE_COLOR[m.case_status] || 'gray'}`}>
                         {m.case_status || '—'}
