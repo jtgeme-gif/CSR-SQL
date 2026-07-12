@@ -14,8 +14,12 @@
 //                          automatically attaches it as an Authorization
 //                          header on scheduled cron invocations.
 //   NEXT_PUBLIC_APP_URL  - base URL used to build the "open in NMT" links in
-//                          the email (e.g. https://sql-tracker.vercel.app).
+//                          the email (e.g. https://m3casetracking.vercel.app).
 //                          Update this if/when the site's domain changes.
+//   SUPABASE_SERVICE_ROLE_KEY - bypasses RLS for this route's queries, since
+//                          a cron job has no logged-in session for RLS to
+//                          check against. Server-side only, never exposed
+//                          to the browser.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -23,10 +27,12 @@ const PA_DIGEST_EMAIL_URL = process.env.PA_DIGEST_EMAIL_URL;
 const CRON_SECRET = process.env.CRON_SECRET;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || '';
 
-// Server-side Supabase client - cron has no logged-in user/session, so this
-// uses the anon key directly. If RLS blocks reads without a session, this
-// will need a service-role key instead (flagged in the build notes).
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+// Server-side Supabase client using the service-role key - a cron job has
+// no logged-in user/session, so the regular anon key gets silently blocked
+// by RLS (empty results, no error). Service-role bypasses RLS entirely,
+// which is safe here since this route is itself protected by CRON_SECRET
+// and never exposed to the browser.
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
