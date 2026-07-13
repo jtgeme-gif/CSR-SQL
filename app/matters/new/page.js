@@ -11,6 +11,12 @@ import { deriveShortName } from '../../../lib/deriveShortName';
 const PRACTICE_GROUPS = ['Auto-Neg', 'Business', 'Police', 'Labor-Employment', 'Municipal', 'Zoning', 'School'];
 const CASE_STATUSES = ['Pre-litigation Monitoring', 'Active Litigation', 'Stayed', 'Closed', 'Appeal'];
 
+function addDays(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function NewMatterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -93,6 +99,8 @@ export default function NewMatterPage() {
     setSaving(true);
     setError(null);
 
+    const csrInitialDue = form.date_opened ? addDays(form.date_opened, 45) : null;
+
     const payload = {
       case_name: form.case_name.trim(),
       short_name: form.short_name.trim() || null,
@@ -101,6 +109,8 @@ export default function NewMatterPage() {
       date_opened: form.date_opened || null,
       incident_date: form.incident_date || null,
       file_number: form.file_number.trim() || null,
+      csr_initial_due: csrInitialDue,
+      csr_next_due: csrInitialDue,
     };
 
     const { data: matter, error: matterError } = await supabase.from('matters').insert(payload).select().single();
@@ -136,30 +146,6 @@ export default function NewMatterPage() {
         const { error: dError } = await supabase.from('case_entities').insert({ matter_id: matterId, entity_id: d.entity_id, role: 'Defendant' });
         if (dError) alert(`Matter created, but adding defendant "${d.name}" failed: ` + dError.message);
       }
-    }
-
-    // Auto-creates the matching CSR Tracker row, flagged CreatedinMT so the
-    // standalone CSR app knows to lock it from manual editing there. Not
-    // fatal if this fails - the matter itself is already saved either way.
-    try {
-      const csrRes = await fetch('/api/csr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caseName: payload.case_name,
-          practiceGroup: payload.practice_group,
-          fileNumber: payload.file_number,
-          dateOpened: payload.date_opened,
-        }),
-      });
-      const csrBody = await csrRes.json().catch(() => ({}));
-      if (!csrRes.ok) {
-        alert('Matter created, but adding it to the CSR Tracker failed: ' + (csrBody.error || csrRes.status));
-      } else if (csrBody.id) {
-        await supabase.from('matters').update({ csr_item_id: csrBody.id }).eq('id', matterId);
-      }
-    } catch (csrErr) {
-      alert('Matter created, but adding it to the CSR Tracker failed: ' + csrErr.message);
     }
 
     setSaving(false);

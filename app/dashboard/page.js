@@ -19,15 +19,6 @@ function daysBetween(fromStr, toStr) {
   return Math.round((b - a) / 86400000);
 }
 
-// SharePoint date fields (like CSR's Next CSR Due) come back as full ISO
-// timestamps (e.g. "2026-08-15T00:00:00Z"), not plain "YYYY-MM-DD" like
-// Postgres date columns. Slicing to the first 10 characters normalizes
-// either format to plain YYYY-MM-DD before it touches daysBetween/addDays.
-function toDateOnly(dateStr) {
-  if (!dateStr) return null;
-  return dateStr.slice(0, 10);
-}
-
 // Rare multi-file-number matters are stored as "1979.1807 (Hancock) /
 // 1979.1810 (Houghton)" - split on "/" so each number stacks on its own
 // line instead of running together. Single-number matters render unchanged.
@@ -73,9 +64,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [events, setEvents] = useState([]);
-  const [matters, setMatters] = useState([]); // assigned matters: id, case_name, file_number, case_status, csr_item_id
+  const [matters, setMatters] = useState([]); // assigned matters: id, case_name, file_number, case_status, csr_next_due
   const [csrRows, setCsrRows] = useState([]); // next 5 upcoming CSR dues
-  const [csrLoading, setCsrLoading] = useState(true);
   const [daysWindow1, setDaysWindow1] = useState('5');
   const [daysWindow2, setDaysWindow2] = useState('14');
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -109,7 +99,7 @@ export default function DashboardPage() {
       if (matterIds.length > 0) {
         const { data: mattersData } = await supabase
           .from('matters')
-          .select('id, case_name, file_number, case_status, csr_item_id')
+          .select('id, case_name, file_number, case_status, csr_next_due')
           .in('id', matterIds);
         setMatters(mattersData || []);
 
@@ -126,7 +116,6 @@ export default function DashboardPage() {
         setMatters([]);
         setEvents([]);
         setCsrRows([]);
-        setCsrLoading(false);
       }
 
       // Load or create this user's saved day-count preferences.
@@ -143,41 +132,18 @@ export default function DashboardPage() {
     setLoading(false);
   }
 
-  // CSR dates live only in SharePoint, not in `events` - pulled per-matter via
-  // the existing /api/csr route (same one CSRTab uses), then merged client-side
-  // to find the 5 soonest upcoming due dates across assigned matters.
-  async function loadCsrDues(matterList) {
-    setCsrLoading(true);
-    const linked = matterList.filter((m) => m.csr_item_id);
-    if (linked.length === 0) {
-      setCsrRows([]);
-      setCsrLoading(false);
-      return;
-    }
-
-    const results = await Promise.all(
-      linked.map(async (m) => {
-        try {
-          const res = await fetch(`/api/csr?itemId=${encodeURIComponent(m.csr_item_id)}`);
-          if (!res.ok) return null;
-          const data = await res.json();
-          if (data?.error || data?.noMatch || !data?.nextDue || data?.closed) return null;
-          return { matterId: m.id, caseName: m.case_name, nextDue: toDateOnly(data.nextDue) };
-        } catch {
-          return null;
-        }
-      })
-    );
-
+  // CSR dates now live directly on matters.csr_next_due (Supabase-native,
+  // no more SharePoint linking) - just a synchronous filter/sort on data
+  // already fetched, no per-matter network calls needed anymore.
+  function loadCsrDues(matterList) {
     const today = todayStr();
-    const upcoming = results
-      .filter(Boolean)
-      .filter((r) => r.nextDue >= today)
+    const upcoming = matterList
+      .filter((m) => m.csr_next_due && m.csr_next_due >= today)
+      .map((m) => ({ matterId: m.id, caseName: m.case_name, nextDue: m.csr_next_due }))
       .sort((a, b) => (a.nextDue < b.nextDue ? -1 : a.nextDue > b.nextDue ? 1 : 0))
       .slice(0, 5);
 
     setCsrRows(upcoming);
-    setCsrLoading(false);
   }
 
   async function savePref(field, value) {
@@ -325,9 +291,8 @@ export default function DashboardPage() {
           <div className="section-card-header">
             <h3>CSR Status</h3>
           </div>
-          {csrLoading && <p className="muted" style={{ fontSize: '13px' }}>Loading…</p>}
-          {!csrLoading && csrRows.length === 0 && <p className="muted" style={{ fontSize: '13px' }}>Nothing upcoming.</p>}
-          {!csrLoading && csrRows.map((r) => {
+          {csrRows.length === 0 && <p className="muted" style={{ fontSize: '13px' }}>Nothing upcoming.</p>}
+          {csrRows.map((r) => {
             const days = daysBetween(today, r.nextDue);
             const badge = daysOutBadge(days);
             return (

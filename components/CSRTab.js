@@ -2,14 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { formatDateSafe } from '../lib/formatDate';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function formatCsrDate(isoStr) {
-  if (!isoStr) return null;
-  return new Date(isoStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 function addDays(dateStr, days) {
@@ -18,21 +14,21 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-// CSRTab is the ONLY place in the UI that knows CSR/SharePoint exists,
-// including owning the write-back of matters.csr_item_id once a matter is
-// linked - a couple of other spots (Case Identification's save, Assigned
-// Staff) also call this same /api/csr route for their own specific actions,
-// but none of them touch raw SharePoint field names, only plain-language
-// actions this route understands.
-export default function CSRTab({ matter, onLinked }) {
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr + 'T00:00:00');
+  const today = new Date(todayStr() + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+// CSR is now fully Supabase-native - no more SharePoint linking, no more
+// /api/csr calls. csr_submissions holds full history (one row per actual
+// submission); matters.csr_next_due is a cached copy of the latest
+// submission's next_due, kept in sync here on every new submission.
+export default function CSRTab({ matter, onChanged }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [csr, setCsr] = useState(null);
-
-  const [creating, setCreating] = useState(false);
-  const [linkIdDraft, setLinkIdDraft] = useState('');
-  const [linking, setLinking] = useState(false);
-  const [linkError, setLinkError] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
 
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [dateSubmitted, setDateSubmitted] = useState(todayStr());
@@ -44,73 +40,19 @@ export default function CSRTab({ matter, onLinked }) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matter.csr_item_id, matter.case_name]);
+  }, [matter.id]);
 
   async function load() {
     setLoading(true);
     setError(null);
-    try {
-      const url = matter.csr_item_id
-        ? `/api/csr?itemId=${encodeURIComponent(matter.csr_item_id)}`
-        : `/api/csr?caseName=${encodeURIComponent(matter.case_name)}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Request failed (${res.status})`);
-      }
-      const data = await res.json();
-      if (data?.noMatch) {
-        setCsr(null);
-      } else {
-        setCsr(data);
-      }
-    } catch (err) {
-      setError(err.message);
-    }
+    const { data, error } = await supabase
+      .from('csr_submissions')
+      .select('*')
+      .eq('matter_id', matter.id)
+      .order('date_submitted', { ascending: false });
+    if (error) setError(error.message);
+    else setSubmissions(data || []);
     setLoading(false);
-  }
-
-  async function saveLinkToMatter(itemId) {
-    const { error } = await supabase.from('matters').update({ csr_item_id: itemId }).eq('id', matter.id);
-    if (error) { alert('Linked in SharePoint, but saving the link on this matter failed: ' + error.message); return; }
-    onLinked?.();
-  }
-
-  async function createInSharePoint() {
-    setCreating(true);
-    try {
-      const res = await fetch('/api/csr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caseName: matter.case_name,
-          practiceGroup: matter.practice_group,
-          fileNumber: matter.file_number,
-          dateOpened: matter.date_opened,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
-      await saveLinkToMatter(body.id);
-    } catch (err) {
-      alert('Could not create the CSR Tracker record: ' + err.message);
-    }
-    setCreating(false);
-  }
-
-  async function linkByItemId() {
-    if (!linkIdDraft.trim()) { setLinkError('Enter an item ID.'); return; }
-    setLinking(true);
-    setLinkError(null);
-    try {
-      const res = await fetch(`/api/csr?itemId=${encodeURIComponent(linkIdDraft.trim())}`);
-      const body = await res.json();
-      if (!res.ok || body?.error) throw new Error(body.error || 'That item ID could not be found.');
-      await saveLinkToMatter(linkIdDraft.trim());
-    } catch (err) {
-      setLinkError(err.message);
-    }
-    setLinking(false);
   }
 
   function openSubmitModal() {
@@ -131,24 +73,36 @@ export default function CSRTab({ matter, onLinked }) {
     if (!confirmed) { setSubmitError('Please confirm the CSR has been submitted.'); return; }
     setSubmitting(true);
     setSubmitError(null);
-    try {
-      const res = await fetch('/api/csr', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemId: matter.csr_item_id,
-          action: 'submitCsr',
-          payload: { priorCsrDate: dateSubmitted, nextCsrDue: nextCsrDueDraft },
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
-      setSubmitModalOpen(false);
-      load();
-    } catch (err) {
-      setSubmitError(err.message);
+
+    const { data: userData } = await supabase.auth.getUser();
+    const submittedBy = userData?.user?.email || null;
+
+    const { error: insertError } = await supabase.from('csr_submissions').insert({
+      matter_id: matter.id,
+      date_submitted: dateSubmitted,
+      next_due: nextCsrDueDraft,
+      submitted_by: submittedBy,
+    });
+    if (insertError) {
+      setSubmitError(insertError.message);
+      setSubmitting(false);
+      return;
     }
+
+    const { error: updateError } = await supabase
+      .from('matters')
+      .update({ csr_next_due: nextCsrDueDraft })
+      .eq('id', matter.id);
+    if (updateError) {
+      setSubmitError('Submission saved, but updating the matter\'s next-due date failed: ' + updateError.message);
+      setSubmitting(false);
+      return;
+    }
+
+    setSubmitModalOpen(false);
     setSubmitting(false);
+    load();
+    onChanged?.();
   }
 
   if (loading) return <p className="muted">Loading…</p>;
@@ -156,74 +110,17 @@ export default function CSRTab({ matter, onLinked }) {
   if (error) {
     return (
       <div className="section-card">
-        <div className="section-card-header"><h3>CSR</h3></div>
+        <div className="section-card-header"><h3>Case Status Report</h3></div>
         <div className="error-box">{error}</div>
       </div>
     );
   }
 
-  // Not linked yet - show the two temporary linking paths.
-  if (!matter.csr_item_id) {
-    return (
-      <div className="section-card">
-        <div className="section-card-header"><h3>CSR</h3></div>
-        <p className="muted" style={{ marginTop: 0 }}>
-          This matter isn't linked to a CSR Tracker record yet. Create a new one, or link to an existing record if it's already in the CSR Tracker.
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '480px' }}>
-          <div>
-            <button className="btn btn-primary" onClick={createInSharePoint} disabled={creating}>
-              {creating ? 'Creating…' : 'Create in SharePoint'}
-            </button>
-            <p className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>Use this if this matter does not already exist in the CSR Tracker.</p>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-              Link by SharePoint Item ID
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                value={linkIdDraft}
-                onChange={(e) => setLinkIdDraft(e.target.value)}
-                placeholder="e.g. 42"
-                style={{ flex: 1, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px' }}
-              />
-              <button className="btn" onClick={linkByItemId} disabled={linking}>{linking ? 'Linking…' : 'Link'}</button>
-            </div>
-            {linkError && <div className="error-box" style={{ marginTop: '6px' }}>{linkError}</div>}
-            <p className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>Use this if this matter already exists in the CSR Tracker.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!csr) {
-    return (
-      <div className="section-card">
-        <div className="section-card-header"><h3>CSR</h3></div>
-        <p className="muted">Linked, but this item could not be loaded from the CSR Tracker. It may have been deleted there.</p>
-      </div>
-    );
-  }
-
-  const overdue = csr.nextDue && new Date(csr.nextDue) < new Date();
-
-  function daysUntil(dateStr) {
-    if (!dateStr) return null;
-    const target = new Date(dateStr);
-    const today = new Date();
-    const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    return Math.round((targetMidnight - todayMidnight) / 86400000);
-  }
-
-  const daysOut = daysUntil(csr.nextDue);
+  const daysOut = daysUntil(matter.csr_next_due);
+  const overdue = daysOut !== null && daysOut < 0;
   const csrHeaderLabel =
     daysOut === null ? 'Case Status Report'
-    : daysOut < 0 ? `Case Status Report Overdue: ${Math.abs(daysOut)} days`
+    : overdue ? `Case Status Report Overdue: ${Math.abs(daysOut)} days`
     : `Case Status Report Due: ${daysOut} days`;
 
   return (
@@ -234,16 +131,42 @@ export default function CSRTab({ matter, onLinked }) {
           <button className="btn btn-primary" onClick={openSubmitModal}>Submit CSR</button>
         </div>
         <div className="detail-grid">
-          <div className="detail-card"><span className="detail-label">Initial CSR Date</span><span className="detail-value">{formatCsrDate(csr.initialDate) || '—'}</span></div>
-          <div className="detail-card"><span className="detail-label">Prior CSR Date</span><span className="detail-value">{formatCsrDate(csr.mostRecent) || '—'}</span></div>
+          <div className="detail-card">
+            <span className="detail-label">Initial CSR Due</span>
+            <span className="detail-value">{matter.csr_initial_due ? formatDateSafe(matter.csr_initial_due) : '—'}</span>
+          </div>
           <div className="detail-card">
             <span className="detail-label">Next CSR Due</span>
             <span className="detail-value" style={{ color: overdue ? 'var(--red)' : undefined, fontWeight: overdue ? 600 : undefined }}>
-              {formatCsrDate(csr.nextDue) || '—'}{overdue ? ' (Overdue)' : ''}
+              {matter.csr_next_due ? formatDateSafe(matter.csr_next_due) : '—'}{overdue ? ' (Overdue)' : ''}
             </span>
           </div>
-          <div className="detail-card"><span className="detail-label">Closed in CSR Tracker</span><span className="detail-value">{csr.closed ? 'Yes' : 'No'}</span></div>
         </div>
+      </div>
+
+      <div className="section-card">
+        <div className="section-card-header"><h3>Submission History</h3></div>
+        {submissions.length === 0 && <p className="muted">No submissions yet.</p>}
+        {submissions.length > 0 && (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date Submitted</th>
+                <th>Next Due (set at time of submission)</th>
+                <th>Submitted By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {submissions.map((s) => (
+                <tr key={s.id}>
+                  <td>{formatDateSafe(s.date_submitted)}</td>
+                  <td>{formatDateSafe(s.next_due)}</td>
+                  <td>{s.submitted_by || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {submitModalOpen && (
@@ -255,7 +178,7 @@ export default function CSRTab({ matter, onLinked }) {
             </div>
             <div className="modal-body">
               <p className="muted" style={{ marginTop: 0 }}>
-                Submitting will set <strong>Prior CSR Date</strong> to the date below and push <strong>Next CSR Due</strong> out by 90 days.
+                Submitting will record this in the CSR history and push <strong>Next CSR Due</strong> out by 90 days.
               </p>
               <div className="form-row">
                 <div className="form-field">

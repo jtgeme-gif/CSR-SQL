@@ -975,7 +975,7 @@ export default function MatterDetailPage() {
       )}
 
       {activeTab === 'CSR' && (
-        <CSRTab matter={matter} onLinked={load} />
+        <CSRTab matter={matter} onChanged={load} />
       )}
 
       {modalPersonId && <PersonModal personId={modalPersonId} onClose={() => setModalPersonId(null)} onChanged={load} />}
