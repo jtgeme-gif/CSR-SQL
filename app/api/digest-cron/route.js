@@ -84,7 +84,7 @@ function buildEmailHtml(matterGroups, today) {
     return `<h3 style="margin-bottom:4px;">${caseHeader}</h3>${rows}`;
   }).join('<hr style="border:none;border-top:1px solid #ccc;margin:16px 0;"/>');
 
-  return `<p>The following records requests are outstanding and require your attention.</p>${sections}`;
+  return `<p>The following records requests remain open as of today.</p>${sections}`;
 }
 
 export async function GET(request) {
