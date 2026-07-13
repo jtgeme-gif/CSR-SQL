@@ -112,7 +112,6 @@ export default function MatterDetailPage() {
   async function saveIdentification() {
     setSavingId(true);
     const newCaseName = idForm.case_name?.trim() || matter.case_name;
-    const nameChanged = newCaseName !== matter.case_name;
     const payload = {
       case_name: newCaseName,
       file_number: idForm.file_number?.trim() || null,
@@ -122,20 +121,6 @@ export default function MatterDetailPage() {
     const { error } = await supabase.from('matters').update(payload).eq('id', matterId);
     setSavingId(false);
     if (error) { alert(error.message); return; }
-
-    if (nameChanged && matter.csr_item_id) {
-      try {
-        const res = await fetch('/api/csr', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ itemId: matter.csr_item_id, action: 'rename', payload: { title: newCaseName } }),
-        });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error || 'Unknown error');
-      } catch (err) {
-        alert('Case Name updated, but syncing the new name to CSR failed: ' + err.message);
-      }
-    }
 
     setEditingId(false);
     load();
@@ -161,19 +146,6 @@ export default function MatterDetailPage() {
     const newClosed = !matter.file_closed;
     const { error } = await supabase.from('matters').update({ file_closed: newClosed }).eq('id', matterId);
     if (error) { alert(error.message); return; }
-    if (matter.csr_item_id) {
-      try {
-        const res = await fetch('/api/csr', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ itemId: matter.csr_item_id, action: 'setClosed', payload: { closed: newClosed } }),
-        });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error || 'Unknown error');
-      } catch (err) {
-        alert('Matter status updated, but syncing the closed status to CSR failed: ' + err.message);
-      }
-    }
     load();
   }
 
@@ -205,27 +177,6 @@ export default function MatterDetailPage() {
     load();
   }
   async function removeStaff(id) { await supabase.from('matter_staff').delete().eq('id', id); load(); }
-
-  const [syncingStaffToCsr, setSyncingStaffToCsr] = useState(false);
-  async function updateCsrStaff() {
-    if (!matter.csr_item_id) { alert('This matter is not linked to the CSR Tracker yet - link it from the CSR tab first.'); return; }
-    setSyncingStaffToCsr(true);
-    const staffNames = staff.map(staffDisplayName).join('; ');
-    const staffEmails = staff.map((s) => s.staff?.email).filter(Boolean).join('; ');
-    try {
-      const res = await fetch('/api/csr', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId: matter.csr_item_id, action: 'updateStaff', payload: { staffNames, staffEmails } }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || 'Unknown error');
-      alert('CSR Tracker staff/email updated.');
-    } catch (err) {
-      alert('Failed to update CSR Tracker: ' + err.message);
-    }
-    setSyncingStaffToCsr(false);
-  }
 
   // ---------- Client Insurer / Claim reps (behind Case Identification Edit) ----------
   async function addClaimRep() {
@@ -764,9 +715,6 @@ export default function MatterDetailPage() {
                   onChange={(id, name) => setNewStaffPick({ staff_id: id, staff_name: name })}
                 />
                 <button className="btn-small" onClick={addStaff}>+ Add</button>
-                <button className="btn-small" onClick={updateCsrStaff} disabled={syncingStaffToCsr}>
-                  {syncingStaffToCsr ? 'Updating…' : 'Update CSR Staff'}
-                </button>
               </div>
             </div>
 
