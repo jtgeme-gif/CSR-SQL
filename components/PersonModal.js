@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import EntityPicker from './EntityPicker';
+import PersonPicker from './PersonPicker';
 import PhoneInput from './PhoneInput';
 import { formatPhoneDisplay } from '../lib/formatPhone';
 import { formatDateSafe } from '../lib/formatDate';
@@ -35,11 +36,56 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
   const [historyLoading, setHistoryLoading] = useState(!isCreate);
   const [showHistory, setShowHistory] = useState(false);
   const [depositionHistory, setDepositionHistory] = useState([]);
+  const [linkedPeople, setLinkedPeople] = useState([]);
+  const [linkedLoading, setLinkedLoading] = useState(!isCreate);
+  const [linkPick, setLinkPick] = useState({ person_id: null, person_name: '' });
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
-    if (!isCreate) { load(); loadHistory(); }
+    if (!isCreate) { load(); loadHistory(); loadLinkedPeople(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personId]);
+
+  // Mutual, one row per pair - query both directions and combine, since a
+  // link could have this person stored as either person_a_id or person_b_id.
+  async function loadLinkedPeople() {
+    setLinkedLoading(true);
+    const [{ data: asA }, { data: asB }] = await Promise.all([
+      supabase.from('person_links').select('id, person_b_id, people:person_b_id(id, first_name, last_name, identity, title)').eq('person_a_id', personId),
+      supabase.from('person_links').select('id, person_a_id, people:person_a_id(id, first_name, last_name, identity, title)').eq('person_b_id', personId),
+    ]);
+    const combined = [
+      ...(asA || []).map((r) => ({ linkId: r.id, ...r.people })),
+      ...(asB || []).map((r) => ({ linkId: r.id, ...r.people })),
+    ];
+    setLinkedPeople(combined);
+    setLinkedLoading(false);
+  }
+
+  async function addLink() {
+    if (!linkPick.person_id) return;
+    if (linkPick.person_id === personId) { alert('A person can\'t be linked to themselves.'); return; }
+    setLinking(true);
+    // Canonically order the pair (smaller id first) so the unique
+    // constraint actually catches a duplicate regardless of which person
+    // initiated the link.
+    const [a, b] = [personId, linkPick.person_id].sort();
+    const { error } = await supabase.from('person_links').insert({ person_a_id: a, person_b_id: b });
+    setLinking(false);
+    if (error) {
+      if (error.code === '23505') { alert('These two people are already linked.'); }
+      else { alert(error.message); }
+      return;
+    }
+    setLinkPick({ person_id: null, person_name: '' });
+    loadLinkedPeople();
+  }
+
+  async function removeLink(linkId) {
+    const { error } = await supabase.from('person_links').delete().eq('id', linkId);
+    if (error) { alert(error.message); return; }
+    loadLinkedPeople();
+  }
 
   async function loadHistory() {
     setHistoryLoading(true);
@@ -325,6 +371,32 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : isCreate ? 'Create Person' : 'Save'}</button>
               <button className="btn" onClick={() => { if (isCreate) { onClose(); } else { setEditing(false); setForm({ ...person, entity_name: person.entities?.name || '' }); } }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {!isCreate && person && (
+          <div className="modal-body" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+              Linked People
+            </label>
+            <div className="chip-row" style={{ marginBottom: '8px' }}>
+              {!linkedLoading && linkedPeople.length === 0 && <span className="muted">Nobody linked yet.</span>}
+              {linkedPeople.map((p) => (
+                <span key={p.linkId} className="chip chip-removable">
+                  {p.first_name} {p.last_name}
+                  <span className="muted" style={{ fontSize: '11px' }}> — {p.title || p.identity}</span>
+                  <button onClick={() => removeLink(p.linkId)}>×</button>
+                </span>
+              ))}
+            </div>
+            <div className="inline-add-row">
+              <PersonPicker
+                value={linkPick.person_id}
+                valueName={linkPick.person_name}
+                onChange={(id, name) => setLinkPick({ person_id: id, person_name: name })}
+              />
+              <button type="button" className="btn-small" onClick={addLink} disabled={linking}>{linking ? 'Linking…' : '+ Link'}</button>
             </div>
           </div>
         )}
