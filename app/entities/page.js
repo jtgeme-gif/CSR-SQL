@@ -21,6 +21,10 @@ export default function EntitiesPage() {
   const [creatingEntity, setCreatingEntity] = useState(false);
 
   useEffect(() => {
+    document.title = 'Directory';
+  }, []);
+
+  useEffect(() => {
     load();
   }, []);
 

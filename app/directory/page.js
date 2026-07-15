@@ -19,6 +19,10 @@ export default function DirectoryPage() {
   const [creatingEntity, setCreatingEntity] = useState(false);
 
   useEffect(() => {
+    document.title = 'Directory';
+  }, []);
+
+  useEffect(() => {
     load();
   }, []);
 

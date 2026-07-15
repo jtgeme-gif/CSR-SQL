@@ -27,6 +27,10 @@ export default function MattersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
+    document.title = 'Matter Tracker';
+  }, []);
+
+  useEffect(() => {
     loadMatters();
   }, []);
 

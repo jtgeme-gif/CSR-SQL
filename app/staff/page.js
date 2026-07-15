@@ -14,6 +14,10 @@ export default function StaffListPage() {
   const [creatingStaff, setCreatingStaff] = useState(false);
 
   useEffect(() => {
+    document.title = 'Staff List';
+  }, []);
+
+  useEffect(() => {
     load();
   }, []);
 

@@ -75,6 +75,10 @@ export default function MatterDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matterId]);
 
+  useEffect(() => {
+    document.title = matter?.short_name || matter?.case_name || 'Matter Tracker';
+  }, [matter]);
+
   async function load() {
     setLoading(true);
     setError(null);

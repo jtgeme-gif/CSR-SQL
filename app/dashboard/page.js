@@ -71,6 +71,10 @@ export default function DashboardPage() {
   const [savingPrefs, setSavingPrefs] = useState(false);
 
   useEffect(() => {
+    document.title = 'Tracker - Dashboard';
+  }, []);
+
+  useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
