@@ -229,7 +229,6 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
   }
 
   const everPlaintiff = historyRows.some((r) => r.role === 'Plaintiff');
-  const mostRecent = historyRows[0];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -246,41 +245,70 @@ export default function PersonModal({ personId, startInEdit, onClose, onChanged 
 
         {!loading && !isCreate && person && !editing && (
           <div className="modal-body">
-            {!historyLoading && mostRecent && (
-              <div className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
-                {mostRecent.repNames.length > 0
-                  ? `Represented by ${mostRecent.repNames.join(', ')}`
-                  : mostRecent.pro_se ? 'Pro Se' : 'No attorney on file'}
-                {' — '}{mostRecent.matters?.case_name || 'Unknown Matter'} ({mostRecent.role})
+            <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+              <div style={{ flex: '1 1 auto', minWidth: 0, lineHeight: 1.5 }}>
+                {person.title && <div style={{ color: 'var(--text-muted)' }}>{person.title}</div>}
+                {(person.entities?.name || person.department) && (
+                  <div style={{ color: 'var(--text-muted)' }}>
+                    {[person.entities?.name, person.department].filter(Boolean).join(' – ')}
+                  </div>
+                )}
+                {person.address && <div>{person.address}</div>}
+                {(person.city || person.state || person.zip) && (
+                  <div>{[person.city, person.state, person.zip].filter(Boolean).join(', ')}</div>
+                )}
+                {(person.phone1 || person.phone2) && (
+                  <div>
+                    {[formatPhoneDisplay(person.phone1), formatPhoneDisplay(person.phone2)].filter(Boolean).join('  /  ')}
+                  </div>
+                )}
+                {(person.email1 || person.email2) && (
+                  <div>{[person.email1, person.email2].filter(Boolean).join('  /  ')}</div>
+                )}
+                {person.website && (
+                  <div>
+                    <a href={person.website.startsWith('http') ? person.website : `https://${person.website}`} target="_blank" rel="noreferrer">{person.website}</a>
+                  </div>
+                )}
+
+                {(person.mediator || person.expert || person.identity === 'Judge') && (
+                  <div className="muted" style={{ fontSize: '12px', marginTop: '10px' }}>
+                    {[
+                      person.mediator ? 'Mediator' : null,
+                      person.expert ? 'Expert' : null,
+                      person.identity === 'Judge' ? [person.court_level, person.court_jurisdiction].filter(Boolean).join(', ') + (person.magjudge ? ' (Magistrate)' : '') : null,
+                    ].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+                {person.field_of_expertise && (
+                  <div className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>{person.field_of_expertise}</div>
+                )}
+                {person.notes && (
+                  <div className="muted" style={{ fontSize: '12px', marginTop: '8px' }}>{person.notes}</div>
+                )}
               </div>
-            )}
-            <div className="detail-grid">
-              <div className="detail-card"><span className="detail-label">Identity</span><span className="detail-value">{person.identity}</span></div>
-              <div className="detail-card"><span className="detail-label">Title</span><span className="detail-value">{person.title || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Entity</span><span className="detail-value">{person.entities?.name || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Department</span><span className="detail-value">{person.department || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Mediator</span><span className="detail-value">{person.mediator ? 'Yes' : 'No'}</span></div>
-              <div className="detail-card"><span className="detail-label">Expert</span><span className="detail-value">{person.expert ? 'Yes' : 'No'}</span></div>
-              <div className="detail-card"><span className="detail-label">{person.phone1_label || 'Phone 1'}</span><span className="detail-value">{formatPhoneDisplay(person.phone1) || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">{person.phone2_label || 'Phone 2'}</span><span className="detail-value">{formatPhoneDisplay(person.phone2) || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">{person.email1_label || 'Email 1'}</span><span className="detail-value">{person.email1 || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">{person.email2_label || 'Email 2'}</span><span className="detail-value">{person.email2 || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Address</span><span className="detail-value">{[person.address, person.city, person.state, person.zip].filter(Boolean).join(', ') || '—'}</span></div>
-              <div className="detail-card"><span className="detail-label">Website</span><span className="detail-value">{person.website || '—'}</span></div>
-              {person.identity === 'Judge' && (
-                <>
-                  <div className="detail-card"><span className="detail-label">Court Level</span><span className="detail-value">{person.court_level || '—'}</span></div>
-                  <div className="detail-card"><span className="detail-label">Court Jurisdiction</span><span className="detail-value">{person.court_jurisdiction || '—'}</span></div>
-                  <div className="detail-card"><span className="detail-label">Magistrate Judge</span><span className="detail-value">{person.magjudge ? 'Yes' : 'No'}</span></div>
-                </>
-              )}
-              {person.field_of_expertise && (
-                <div className="detail-card"><span className="detail-label">Expertise if Expert / Other Information</span><span className="detail-value">{person.field_of_expertise}</span></div>
-              )}
-              {person.notes && (
-                <div className="detail-card" style={{ gridColumn: '1 / -1' }}><span className="detail-label">Notes</span><span className="detail-value">{person.notes}</span></div>
+
+              {!historyLoading && historyRows.length > 0 && (
+                <div style={{ flex: '0 0 220px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>RECENT MATTERS</div>
+                  {historyRows.slice(0, 3).map((r) => (
+                    <div key={r.id} style={{ marginBottom: '8px' }}>
+                      <div style={{ fontWeight: 600, fontSize: '13px' }}>{r.matters?.case_name || 'Unknown Matter'}</div>
+                      <div className="muted" style={{ fontSize: '12px' }}>
+                        {r.role}
+                        {r.repNames.length > 0 ? ` — Represented by ${r.repNames.join(', ')}` : r.pro_se ? ' — Pro Se' : ''}
+                      </div>
+                    </div>
+                  ))}
+                  {historyRows.length > 3 && (
+                    <button type="button" className="btn-small" onClick={() => setShowHistory(true)}>
+                      +{historyRows.length - 3} more
+                    </button>
+                  )}
+                </div>
               )}
             </div>
+
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={() => setEditing(true)}>Edit</button>
               <button className="btn" onClick={() => setShowHistory(true)}>History</button>
