@@ -316,9 +316,18 @@ export default function MatterDetailPage() {
     setEditingGroup((g) => ({ ...g, [role]: !g[role] }));
   }
 
-  // Grouping key for auto-sort: primary (alphabetically-first) attorney's last-first
-  // name representing this party, or null if nobody represents them (sorts last).
-  function attorneyGroupKey(partyKind, partyId) {
+  // Attorney person_ids representing this specific party in this case (for
+  // tiebreaking within an entity's cluster - "same attorney as the entity or not").
+  function attorneyIdsFor(partyKind, partyId) {
+    return casePeople
+      .filter((c) => c.role === 'Attorney' &&
+        (partyKind === 'entity' ? c.represents_case_entity_id === partyId : c.represents_case_person_id === partyId))
+      .map((c) => c.person_id);
+  }
+
+  // Attorney name key used only for the leftover (no matching employer) bucket,
+  // so it still groups sensibly by counsel the way the old flat sort did.
+  function attorneyNameKeyFor(partyKind, partyId) {
     const attys = casePeople.filter((c) => c.role === 'Attorney' &&
       (partyKind === 'entity' ? c.represents_case_entity_id === partyId : c.represents_case_person_id === partyId));
     if (attys.length === 0) return null;
@@ -329,45 +338,74 @@ export default function MatterDetailPage() {
     return names[0] || null;
   }
 
-  // Merges entities+people for a role into one ordered list. If anything in the
-  // group has an explicit sort_order, that manual order wins outright; otherwise
-  // auto-sorts by attorney (grouped, alphabetical), no-attorney parties last.
+  // Merges entities+people for a role into one ordered list.
+  // If anything in the group has an explicit sort_order, that manual order wins
+  // outright (this is the ▲▼ override, kept as a fine-tuning/last-resort option).
+  // Otherwise: entities are anchors (alphabetical by name); anyone whose own
+  // People record has that entity as employer clusters directly beneath it,
+  // sharing-the-entity's-attorney first, then alphabetical. Anyone with no
+  // matching employer entity falls to the bottom, grouped by their own attorney.
   function combinedSortedParties(entities, people) {
-    const combined = [
-      ...entities.map((ce) => ({
-        type: 'entity',
-        id: ce.id,
-        data: ce,
-        sortOrder: ce.sort_order,
-        name: ce.entities?.name || '',
-        attorneyKey: attorneyGroupKey('entity', ce.id),
-      })),
-      ...people.map((cp) => ({
-        type: 'person',
-        id: cp.id,
-        data: cp,
-        sortOrder: cp.sort_order,
-        name: `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim(),
-        attorneyKey: attorneyGroupKey('person', cp.id),
-      })),
-    ];
+    const entityItems = entities.map((ce) => ({
+      type: 'entity',
+      id: ce.id,
+      data: ce,
+      sortOrder: ce.sort_order,
+      name: ce.entities?.name || '',
+      attorneyIds: attorneyIdsFor('entity', ce.id),
+      employerEntityId: ce.entities?.id || null,
+    }));
 
-    const anyManual = combined.some((c) => c.sortOrder !== null && c.sortOrder !== undefined);
+    const personItems = people.map((cp) => ({
+      type: 'person',
+      id: cp.id,
+      data: cp,
+      sortOrder: cp.sort_order,
+      name: `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim(),
+      attorneyIds: attorneyIdsFor('person', cp.id),
+      attorneyNameKey: attorneyNameKeyFor('person', cp.id),
+      employerEntityId: cp.people?.entity_id || null,
+    }));
+
+    const all = [...entityItems, ...personItems];
+    const anyManual = all.some((c) => c.sortOrder !== null && c.sortOrder !== undefined);
     if (anyManual) {
-      return combined.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
+      return all.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
     }
 
-    return combined.sort((a, b) => {
-      const aKey = a.attorneyKey === null ? '\uffff' : a.attorneyKey;
-      const bKey = b.attorneyKey === null ? '\uffff' : b.attorneyKey;
-      if (aKey !== bKey) return aKey.localeCompare(bKey);
-      return a.name.localeCompare(b.name);
-    });
+    const sortedEntities = [...entityItems].sort((a, b) => a.name.localeCompare(b.name));
+    const usedPersonIds = new Set();
+    const ordered = [];
+
+    for (const ent of sortedEntities) {
+      ordered.push(ent);
+      const children = personItems.filter((p) => p.employerEntityId && p.employerEntityId === ent.employerEntityId);
+      children.sort((a, b) => {
+        const aShares = a.attorneyIds.some((id) => ent.attorneyIds.includes(id)) ? 0 : 1;
+        const bShares = b.attorneyIds.some((id) => ent.attorneyIds.includes(id)) ? 0 : 1;
+        if (aShares !== bShares) return aShares - bShares;
+        return a.name.localeCompare(b.name);
+      });
+      children.forEach((c) => { ordered.push(c); usedPersonIds.add(c.id); });
+    }
+
+    const leftover = personItems
+      .filter((p) => !usedPersonIds.has(p.id))
+      .sort((a, b) => {
+        const aKey = a.attorneyNameKey === null ? '\uffff' : a.attorneyNameKey;
+        const bKey = b.attorneyNameKey === null ? '\uffff' : b.attorneyNameKey;
+        if (aKey !== bKey) return aKey.localeCompare(bKey);
+        return a.name.localeCompare(b.name);
+      });
+
+    return [...ordered, ...leftover];
   }
 
   // Manual reorder. On the first nudge within a group, snapshots everyone's
   // current position into explicit sort_order values (not just the pair being
-  // swapped) so the whole group switches over to manual ordering at once.
+  // swapped) so the whole group switches to manual ordering at once. Updates
+  // local state directly (optimistic) instead of reloading everything from
+  // Supabase, so clicking an arrow doesn't refetch/flicker the whole page.
   async function moveParty(combined, index, direction) {
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= combined.length) return;
@@ -380,13 +418,23 @@ export default function MatterDetailPage() {
     working[newIndex].sortOrder = tmp;
 
     const toPersist = needsSnapshot ? working : [working[index], working[newIndex]];
+    const entityUpdates = new Map(toPersist.filter((w) => w.type === 'entity').map((w) => [w.id, w.sortOrder]));
+    const personUpdates = new Map(toPersist.filter((w) => w.type === 'person').map((w) => [w.id, w.sortOrder]));
+
+    if (entityUpdates.size > 0) {
+      setCaseEntities((prev) => prev.map((ce) => (entityUpdates.has(ce.id) ? { ...ce, sort_order: entityUpdates.get(ce.id) } : ce)));
+    }
+    if (personUpdates.size > 0) {
+      setCasePeople((prev) => prev.map((cp) => (personUpdates.has(cp.id) ? { ...cp, sort_order: personUpdates.get(cp.id) } : cp)));
+    }
+
     for (const item of toPersist) {
       const table = item.type === 'entity' ? 'case_entities' : 'case_people';
       const { error } = await supabase.from(table).update({ sort_order: item.sortOrder }).eq('id', item.id);
-      if (error) { alert(error.message); return; }
+      if (error) { alert('Reorder failed to save, reloading: ' + error.message); load(); return; }
     }
-    load();
   }
+
 
   function startEditDismissed(id, type, current) {
     setEditingDismissedFor({ id, type });
