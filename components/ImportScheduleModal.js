@@ -147,7 +147,7 @@ export default function ImportScheduleModal({ matterId, eventTypes, calendarTitl
 
   return (
     <div className="modal-overlay" onClick={saving ? undefined : onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '820px' }}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '980px' }}>
         <div className="modal-header">
           <h2>Import Scheduling Document</h2>
           <button className="modal-close" onClick={onClose} disabled={saving}>×</button>
@@ -217,14 +217,14 @@ export default function ImportScheduleModal({ matterId, eventTypes, calendarTitl
                 Review each row before adding. Edit anything that's wrong, and toggle off anything you don't want added.
               </p>
 
-              <table className="table">
+              <table className="table" style={{ tableLayout: 'fixed', width: '100%' }}>
                 <thead>
                   <tr>
-                    <th>Include</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Date</th>
-                    <th title="Not yet functional - reserved for the upcoming Task tab">Create Task</th>
+                    <th style={{ width: '50px' }}>Include</th>
+                    <th style={{ width: '38%' }}>Description</th>
+                    <th style={{ width: '160px' }}>Category</th>
+                    <th style={{ width: '130px' }}>Date</th>
+                    <th style={{ width: '80px' }} title="Not yet functional - reserved for the upcoming Task tab">Create Task</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -242,11 +242,12 @@ export default function ImportScheduleModal({ matterId, eventTypes, calendarTitl
                           />
                         </td>
                         <td>
-                          <input
+                          <textarea
                             value={row.description}
                             disabled={saving}
                             onChange={(e) => updateRow(row.id, 'description', e.target.value)}
-                            style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px' }}
+                            rows={2}
+                            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
                           />
                         </td>
                         <td>
