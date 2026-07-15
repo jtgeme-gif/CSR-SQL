@@ -316,6 +316,78 @@ export default function MatterDetailPage() {
     setEditingGroup((g) => ({ ...g, [role]: !g[role] }));
   }
 
+  // Grouping key for auto-sort: primary (alphabetically-first) attorney's last-first
+  // name representing this party, or null if nobody represents them (sorts last).
+  function attorneyGroupKey(partyKind, partyId) {
+    const attys = casePeople.filter((c) => c.role === 'Attorney' &&
+      (partyKind === 'entity' ? c.represents_case_entity_id === partyId : c.represents_case_person_id === partyId));
+    if (attys.length === 0) return null;
+    const names = attys
+      .map((a) => `${a.people?.last_name || ''} ${a.people?.first_name || ''}`.trim())
+      .filter(Boolean)
+      .sort();
+    return names[0] || null;
+  }
+
+  // Merges entities+people for a role into one ordered list. If anything in the
+  // group has an explicit sort_order, that manual order wins outright; otherwise
+  // auto-sorts by attorney (grouped, alphabetical), no-attorney parties last.
+  function combinedSortedParties(entities, people) {
+    const combined = [
+      ...entities.map((ce) => ({
+        type: 'entity',
+        id: ce.id,
+        data: ce,
+        sortOrder: ce.sort_order,
+        name: ce.entities?.name || '',
+        attorneyKey: attorneyGroupKey('entity', ce.id),
+      })),
+      ...people.map((cp) => ({
+        type: 'person',
+        id: cp.id,
+        data: cp,
+        sortOrder: cp.sort_order,
+        name: `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim(),
+        attorneyKey: attorneyGroupKey('person', cp.id),
+      })),
+    ];
+
+    const anyManual = combined.some((c) => c.sortOrder !== null && c.sortOrder !== undefined);
+    if (anyManual) {
+      return combined.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
+    }
+
+    return combined.sort((a, b) => {
+      const aKey = a.attorneyKey === null ? '\uffff' : a.attorneyKey;
+      const bKey = b.attorneyKey === null ? '\uffff' : b.attorneyKey;
+      if (aKey !== bKey) return aKey.localeCompare(bKey);
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  // Manual reorder. On the first nudge within a group, snapshots everyone's
+  // current position into explicit sort_order values (not just the pair being
+  // swapped) so the whole group switches over to manual ordering at once.
+  async function moveParty(combined, index, direction) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= combined.length) return;
+
+    const needsSnapshot = combined.every((c) => c.sortOrder === null || c.sortOrder === undefined);
+    const working = combined.map((c, i) => ({ ...c, sortOrder: needsSnapshot ? i : c.sortOrder }));
+
+    const tmp = working[index].sortOrder;
+    working[index].sortOrder = working[newIndex].sortOrder;
+    working[newIndex].sortOrder = tmp;
+
+    const toPersist = needsSnapshot ? working : [working[index], working[newIndex]];
+    for (const item of toPersist) {
+      const table = item.type === 'entity' ? 'case_entities' : 'case_people';
+      const { error } = await supabase.from(table).update({ sort_order: item.sortOrder }).eq('id', item.id);
+      if (error) { alert(error.message); return; }
+    }
+    load();
+  }
+
   function startEditDismissed(id, type, current) {
     setEditingDismissedFor({ id, type });
     setDismissedDraft({ dismissed: !!current.dismissed, note: current.dismissal_note || '' });
@@ -360,9 +432,132 @@ export default function MatterDetailPage() {
     return { entities: caseEntities.filter((ce) => ce.role === role), people: casePeople.filter((cp) => cp.role === role) };
   }
 
+  function renderPersonPartyCard(cp, isEditing, moveButtons, role) {
+    const attyKey = nestedKey('atty-person', cp.id);
+    const attyForm = nestedFormFor(attyKey);
+    const attys = casePeople.filter((c) => c.role === 'Attorney' && c.represents_case_person_id === cp.id);
+    const displayName = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim() + (cp.capacity ? ` ${cp.capacity}` : '') + (cp.pro_se ? ' — Pro Se' : '');
+    const partyContactAddress = [cp.people?.address, cp.people?.city, cp.people?.state, cp.people?.zip].filter(Boolean).join(', ');
+    const isDismissedEditing = editingDismissedFor?.id === cp.id && editingDismissedFor?.type === 'person';
+
+    return (
+      <div key={cp.id} className="party-card" style={{ opacity: cp.dismissed ? 0.6 : 1 }}>
+        <div className="party-card-header">
+          <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{displayName}</a>
+          <span className="badge badge-gray">Person</span>
+          {cp.dismissed && <span className="badge badge-red">Dismissed</span>}
+          {moveButtons}
+          {isEditing && <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>}
+        </div>
+
+        {cp.dismissed && cp.dismissal_note && !isDismissedEditing && (
+          <div className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>{cp.dismissal_note}</div>
+        )}
+
+        {editingCapacityFor === cp.id ? (
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+            <input
+              style={{ flex: 1, maxWidth: '280px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
+              placeholder="Add capacity text"
+              value={capacityDraft}
+              onChange={(e) => setCapacityDraft(e.target.value)}
+            />
+            <button className="btn-small btn-primary" onClick={() => saveCapacity(cp.id)}>Save</button>
+            <button className="btn-small" onClick={() => setEditingCapacityFor(null)}>Cancel</button>
+          </div>
+        ) : (
+          <div
+            className="muted"
+            style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }}
+            onClick={() => { setEditingCapacityFor(cp.id); setCapacityDraft(cp.capacity || ''); }}
+          >
+            {'Edit / Add Capacity'}
+          </div>
+        )}
+
+        {isEditing && (
+          isDismissedEditing ? (
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                <input type="checkbox" checked={dismissedDraft.dismissed} onChange={(e) => setDismissedDraft((d) => ({ ...d, dismissed: e.target.checked }))} />
+                Not Active in Case
+              </label>
+              {dismissedDraft.dismissed && (
+                <input
+                  style={{ flex: 1, minWidth: '160px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
+                  placeholder="e.g. dismissed by stipulation, settled"
+                  value={dismissedDraft.note}
+                  onChange={(e) => setDismissedDraft((d) => ({ ...d, note: e.target.value }))}
+                />
+              )}
+              <button className="btn-small btn-primary" onClick={saveDismissed}>Save</button>
+              <button className="btn-small" onClick={() => setEditingDismissedFor(null)}>Cancel</button>
+            </div>
+          ) : (
+            <button className="btn-small" style={{ marginTop: '4px' }} onClick={() => startEditDismissed(cp.id, 'person', cp)}>
+              {cp.dismissed ? 'Edit Dismissal' : 'Not Active in Case'}
+            </button>
+          )
+        )}
+
+        {role === 'Defendant' && (
+          <div className="nested-block">
+            <span className="nested-label">Contact:</span>
+            <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {cp.people?.email1 && <a href={mailtoHref(cp.people.email1)}>{cp.people.email1}</a>}
+              {cp.people?.phone1 && <span>{formatPhoneDisplay(cp.people.phone1)}</span>}
+              {!cp.people?.email1 && !cp.people?.phone1 && <span className="muted">No contact info on file.</span>}
+            </div>
+          </div>
+        )}
+
+        {(role === 'Plaintiff' || role === 'Co-Defendant') && isEditing && (
+          <div className="form-checkbox" style={{ marginTop: '4px', marginBottom: 0 }}>
+            <input type="checkbox" id={`prose-${cp.id}`} checked={!!cp.pro_se} onChange={() => togglePartyProSe(cp)} />
+            <label htmlFor={`prose-${cp.id}`} style={{ fontSize: '11px' }}>Pro Se (no attorney)</label>
+          </div>
+        )}
+
+        {(role === 'Plaintiff' || role === 'Co-Defendant') && (
+          cp.pro_se ? (
+            <div className="nested-block">
+              <span className="nested-label">Contact:</span>
+              <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {cp.people?.email1 && <a href={mailtoHref(cp.people.email1)}>{cp.people.email1}</a>}
+                {cp.people?.phone1 && <span>{formatPhoneDisplay(cp.people.phone1)}</span>}
+                {partyContactAddress && <span>{partyContactAddress}</span>}
+                {!cp.people?.email1 && !cp.people?.phone1 && !partyContactAddress && <span className="muted">No contact info on file.</span>}
+              </div>
+            </div>
+          ) : (
+            <div className="nested-block">
+              <span className="nested-label">Attorney(s):</span>
+              {attys.map((a) => renderPersonChip(a, isEditing ? () => removeCasePerson(a.id) : undefined))}
+              {isEditing && (
+                <span style={{ position: 'relative' }}>
+                  <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
+                  {openPopover === attyKey && (
+                    <div className="popover">
+                      <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
+                      <div className="modal-actions" style={{ marginTop: '8px' }}>
+                        <button className="btn-small btn-primary" onClick={() => addAttorney('person', cp.id)}>Add</button>
+                        <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </span>
+              )}
+            </div>
+          )
+        )}
+      </div>
+    );
+  }
+
   function renderPartyGroup(role) {
     const { entities, people } = partiesForRole(role);
     const isEditing = !!editingGroup[role];
+    const combined = combinedSortedParties(entities, people);
 
     return (
       <div className="party-group" key={role}>
@@ -378,7 +573,17 @@ export default function MatterDetailPage() {
           </div>
         )}
 
-        {entities.map((ce) => {
+        {combined.map((item, partyIndex) => {
+          const moveButtons = isEditing && (
+            <span style={{ display: 'inline-flex', gap: '2px' }}>
+              <button className="btn-small" disabled={partyIndex === 0} onClick={() => moveParty(combined, partyIndex, -1)} title="Move up">↑</button>
+              <button className="btn-small" disabled={partyIndex === combined.length - 1} onClick={() => moveParty(combined, partyIndex, 1)} title="Move down">↓</button>
+            </span>
+          );
+
+          if (item.type !== 'entity') return renderPersonPartyCard(item.data, isEditing, moveButtons, role);
+
+          const ce = item.data;
           const pocKey = nestedKey('poc', ce.id);
           const pocForm = nestedFormFor(pocKey);
           const pocs = casePeople.filter((cp) => cp.role === 'POC' && cp.poc_entity_id === ce.entities?.id);
@@ -393,6 +598,7 @@ export default function MatterDetailPage() {
                 <a className="row-link" onClick={() => setModalEntityId(ce.entities?.id)}>{ce.entities?.name}</a>
                 <span className="badge badge-blue">Entity</span>
                 {ce.dismissed && <span className="badge badge-red">Dismissed</span>}
+                {moveButtons}
                 {isEditing && <button className="btn-small btn-small-danger" onClick={() => removeEntityParty(ce.id)}>Remove</button>}
               </div>
 
@@ -465,127 +671,6 @@ export default function MatterDetailPage() {
                     </span>
                   )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-
-        {people.map((cp) => {
-          const attyKey = nestedKey('atty-person', cp.id);
-          const attyForm = nestedFormFor(attyKey);
-          const attys = casePeople.filter((c) => c.role === 'Attorney' && c.represents_case_person_id === cp.id);
-          const displayName = `${cp.people?.first_name || ''} ${cp.people?.last_name || ''}`.trim() + (cp.capacity ? ` ${cp.capacity}` : '') + (cp.pro_se ? ' — Pro Se' : '');
-          const partyContactAddress = [cp.people?.address, cp.people?.city, cp.people?.state, cp.people?.zip].filter(Boolean).join(', ');
-          const isDismissedEditing = editingDismissedFor?.id === cp.id && editingDismissedFor?.type === 'person';
-
-          return (
-            <div key={cp.id} className="party-card" style={{ opacity: cp.dismissed ? 0.6 : 1 }}>
-              <div className="party-card-header">
-                <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{displayName}</a>
-                <span className="badge badge-gray">Person</span>
-                {cp.dismissed && <span className="badge badge-red">Dismissed</span>}
-                {isEditing && <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>}
-              </div>
-
-              {cp.dismissed && cp.dismissal_note && !isDismissedEditing && (
-                <div className="muted" style={{ fontSize: '11px', marginTop: '2px' }}>{cp.dismissal_note}</div>
-              )}
-
-              {editingCapacityFor === cp.id ? (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
-                  <input
-                    style={{ flex: 1, maxWidth: '280px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
-                    placeholder="Add capacity text"
-                    value={capacityDraft}
-                    onChange={(e) => setCapacityDraft(e.target.value)}
-                  />
-                  <button className="btn-small btn-primary" onClick={() => saveCapacity(cp.id)}>Save</button>
-                  <button className="btn-small" onClick={() => setEditingCapacityFor(null)}>Cancel</button>
-                </div>
-              ) : (
-                <div
-                  className="muted"
-                  style={{ fontSize: '11px', marginTop: '2px', cursor: 'pointer' }}
-                  onClick={() => { setEditingCapacityFor(cp.id); setCapacityDraft(cp.capacity || ''); }}
-                >
-                  {'Edit / Add Capacity'}
-                </div>
-              )}
-
-              {isEditing && (
-                isDismissedEditing ? (
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
-                      <input type="checkbox" checked={dismissedDraft.dismissed} onChange={(e) => setDismissedDraft((d) => ({ ...d, dismissed: e.target.checked }))} />
-                      Not Active in Case
-                    </label>
-                    {dismissedDraft.dismissed && (
-                      <input
-                        style={{ flex: 1, minWidth: '160px', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}
-                        placeholder="e.g. dismissed by stipulation, settled"
-                        value={dismissedDraft.note}
-                        onChange={(e) => setDismissedDraft((d) => ({ ...d, note: e.target.value }))}
-                      />
-                    )}
-                    <button className="btn-small btn-primary" onClick={saveDismissed}>Save</button>
-                    <button className="btn-small" onClick={() => setEditingDismissedFor(null)}>Cancel</button>
-                  </div>
-                ) : (
-                  <button className="btn-small" style={{ marginTop: '4px' }} onClick={() => startEditDismissed(cp.id, 'person', cp)}>
-                    {cp.dismissed ? 'Edit Dismissal' : 'Not Active in Case'}
-                  </button>
-                )
-              )}
-
-              {role === 'Defendant' && (
-                <div className="nested-block">
-                  <span className="nested-label">Contact:</span>
-                  <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {cp.people?.email1 && <a href={mailtoHref(cp.people.email1)}>{cp.people.email1}</a>}
-                    {cp.people?.phone1 && <span>{formatPhoneDisplay(cp.people.phone1)}</span>}
-                    {!cp.people?.email1 && !cp.people?.phone1 && <span className="muted">No contact info on file.</span>}
-                  </div>
-                </div>
-              )}
-
-              {(role === 'Plaintiff' || role === 'Co-Defendant') && isEditing && (
-                <div className="form-checkbox" style={{ marginTop: '4px', marginBottom: 0 }}>
-                  <input type="checkbox" id={`prose-${cp.id}`} checked={!!cp.pro_se} onChange={() => togglePartyProSe(cp)} />
-                  <label htmlFor={`prose-${cp.id}`} style={{ fontSize: '11px' }}>Pro Se (no attorney)</label>
-                </div>
-              )}
-
-              {(role === 'Plaintiff' || role === 'Co-Defendant') && (
-                cp.pro_se ? (
-                  <div className="nested-block">
-                    <span className="nested-label">Contact:</span>
-                    <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      {cp.people?.email1 && <a href={mailtoHref(cp.people.email1)}>{cp.people.email1}</a>}
-                      {cp.people?.phone1 && <span>{formatPhoneDisplay(cp.people.phone1)}</span>}
-                      {partyContactAddress && <span>{partyContactAddress}</span>}
-                      {!cp.people?.email1 && !cp.people?.phone1 && !partyContactAddress && <span className="muted">No contact info on file.</span>}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="nested-block">
-                    <span className="nested-label">Attorney(s):</span>
-                    {attys.map((a) => renderPersonChip(a, isEditing ? () => removeCasePerson(a.id) : undefined))}
-                    {isEditing && (
-                      <span style={{ position: 'relative' }}>
-                        <button className="btn-small" onClick={() => togglePopover(attyKey)}>+ Add Attorney</button>
-                        {openPopover === attyKey && (
-                          <div className="popover">
-                            <PersonPicker value={attyForm.person_id} valueName={attyForm.person_name} onChange={(id, name) => updateNestedForm(attyKey, { person_id: id, person_name: name })} />
-                            <div className="modal-actions" style={{ marginTop: '8px' }}>
-                              <button className="btn-small btn-primary" onClick={() => addAttorney('person', cp.id)}>Add</button>
-                              <button className="btn-small" onClick={() => setOpenPopover(null)}>Cancel</button>
-                            </div>
-                          </div>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                )
               )}
             </div>
           );
