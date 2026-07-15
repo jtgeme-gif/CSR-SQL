@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { syncEventToCalendar } from '../lib/calendarSync';
+import CasePartyPicker from './CasePartyPicker';
 
 const CATEGORIES = [
   'Discovery',
@@ -14,6 +15,10 @@ const CATEGORIES = [
   'Status Conference/Pre-Trial',
   'Trial',
 ];
+
+// Same set SchedulingTab treats as "timed" (has a time-of-day, not just an
+// all-day date) - kept in sync manually since this is a small, stable list.
+const TIMED_CATEGORIES = ['Deposition', 'Hearing', 'Status Conference/Pre-Trial', 'Trial', 'Mediation'];
 
 let nextRowId = 1;
 
@@ -84,6 +89,10 @@ export default function ImportScheduleModal({ matterId, eventTypes, calendarTitl
           description: ev.description,
           category: ev.category,
           date: ev.date,
+          time: ev.time || '',
+          durationHours: ev.time ? '1' : '',
+          casePeopleId: null,
+          casePeopleName: ev.witnessName || '',
           include: true,
           createTask: true, // cosmetic only - not read anywhere yet
         }))
@@ -117,12 +126,16 @@ export default function ImportScheduleModal({ matterId, eventTypes, calendarTitl
         continue;
       }
 
+      const isTimed = TIMED_CATEGORIES.includes(row.category);
       const payload = {
         matter_id: matterId,
         event_type_id: eventTypeId,
         description: row.description.trim(),
         event_date: row.date,
-        all_day: true,
+        all_day: isTimed ? !row.time : true,
+        event_time: isTimed && row.time ? row.time : null,
+        duration_minutes: isTimed && row.time && row.durationHours ? Math.round(parseFloat(row.durationHours) * 60) : null,
+        case_people_id: row.category === 'Deposition' ? (row.casePeopleId || null) : null,
       };
 
       const { data: savedRow, error } = await supabase.from('events').insert(payload).select().single();
@@ -217,68 +230,122 @@ export default function ImportScheduleModal({ matterId, eventTypes, calendarTitl
                 Review each row before adding. Edit anything that's wrong, and toggle off anything you don't want added.
               </p>
 
-              <table className="table" style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
                 <thead>
-                  <tr>
-                    <th style={{ width: '50px' }}>Include</th>
-                    <th style={{ width: '38%' }}>Description</th>
-                    <th style={{ width: '160px' }}>Category</th>
-                    <th style={{ width: '130px' }}>Date</th>
-                    <th style={{ width: '80px' }} title="Not yet functional - reserved for the upcoming Task tab">Create Task</th>
-                    <th></th>
+                  <tr className="table" style={{ textAlign: 'left' }}>
+                    <th style={{ width: '50px', padding: '8px' }}>Include</th>
+                    <th style={{ width: '34%', padding: '8px' }}>Description</th>
+                    <th style={{ width: '170px', padding: '8px 24px 8px 8px' }}>Category</th>
+                    <th style={{ width: '150px', padding: '8px' }}>Date</th>
+                    <th style={{ width: '80px', padding: '8px' }} title="Not yet functional - reserved for the upcoming Task tab">Create Task</th>
+                    <th style={{ padding: '8px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => {
                     const status = rowStatus[row.id];
+                    const isTimed = TIMED_CATEGORIES.includes(row.category);
+                    const isDeposition = row.category === 'Deposition';
                     return (
-                      <tr key={row.id} style={{ opacity: row.include ? 1 : 0.5 }}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={row.include}
-                            disabled={saving}
-                            onChange={(e) => updateRow(row.id, 'include', e.target.checked)}
-                          />
-                        </td>
-                        <td>
-                          <textarea
-                            value={row.description}
-                            disabled={saving}
-                            onChange={(e) => updateRow(row.id, 'description', e.target.value)}
-                            rows={2}
-                            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            value={row.category}
-                            disabled={saving}
-                            onChange={(e) => updateRow(row.id, 'category', e.target.value)}
-                          >
-                            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="date"
-                            value={row.date}
-                            disabled={saving}
-                            onChange={(e) => updateRow(row.id, 'date', e.target.value)}
-                          />
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <input
-                            type="checkbox"
-                            checked={row.createTask}
-                            disabled={saving}
-                            onChange={(e) => updateRow(row.id, 'createTask', e.target.checked)}
-                          />
-                        </td>
-                        <td className="muted" style={{ fontSize: '11px', minWidth: '90px' }}>
-                          {status === 'saving' ? 'Adding…' : status === 'done' ? '✓ Added' : status || ''}
-                        </td>
-                      </tr>
+                      <Fragment key={row.id}>
+                        <tr style={{ borderTop: '1px solid var(--border)', opacity: row.include ? 1 : 0.5 }}>
+                          <td style={{ padding: '8px', verticalAlign: 'top' }}>
+                            <input
+                              type="checkbox"
+                              checked={row.include}
+                              disabled={saving}
+                              onChange={(e) => updateRow(row.id, 'include', e.target.checked)}
+                            />
+                          </td>
+                          <td style={{ padding: '8px', verticalAlign: 'top' }}>
+                            <textarea
+                              value={row.description}
+                              disabled={saving}
+                              onChange={(e) => updateRow(row.id, 'description', e.target.value)}
+                              rows={2}
+                              style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+                            />
+                          </td>
+                          <td style={{ padding: '8px 24px 8px 8px', verticalAlign: 'top' }}>
+                            <select
+                              value={row.category}
+                              disabled={saving}
+                              onChange={(e) => updateRow(row.id, 'category', e.target.value)}
+                              style={{ width: '100%', padding: '6px 8px', boxSizing: 'border-box' }}
+                            >
+                              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ padding: '8px', verticalAlign: 'top' }}>
+                            <input
+                              type="date"
+                              value={row.date}
+                              disabled={saving}
+                              onChange={(e) => updateRow(row.id, 'date', e.target.value)}
+                              style={{ width: '100%', padding: '6px 8px', boxSizing: 'border-box' }}
+                            />
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center', verticalAlign: 'top' }}>
+                            <input
+                              type="checkbox"
+                              checked={row.createTask}
+                              disabled={saving}
+                              onChange={(e) => updateRow(row.id, 'createTask', e.target.checked)}
+                            />
+                          </td>
+                          <td className="muted" style={{ padding: '8px', fontSize: '11px', minWidth: '90px', verticalAlign: 'top' }}>
+                            {status === 'saving' ? 'Adding…' : status === 'done' ? '✓ Added' : status || ''}
+                          </td>
+                        </tr>
+                        {(isTimed || isDeposition) && (
+                          <tr style={{ opacity: row.include ? 1 : 0.5 }}>
+                            <td></td>
+                            <td colSpan={5} style={{ padding: '0 8px 12px 8px' }}>
+                              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'var(--gray-bg, #f7f8fa)', padding: '10px 12px', borderRadius: 'var(--radius)' }}>
+                                {isTimed && (
+                                  <>
+                                    <div>
+                                      <label className="muted" style={{ display: 'block', fontSize: '11px', marginBottom: '4px' }}>Time</label>
+                                      <input
+                                        type="time"
+                                        value={row.time}
+                                        disabled={saving}
+                                        onChange={(e) => updateRow(row.id, 'time', e.target.value)}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="muted" style={{ display: 'block', fontSize: '11px', marginBottom: '4px' }}>Duration (hours)</label>
+                                      <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0"
+                                        value={row.durationHours}
+                                        disabled={saving}
+                                        onChange={(e) => updateRow(row.id, 'durationHours', e.target.value)}
+                                        style={{ width: '80px', padding: '6px 8px', boxSizing: 'border-box' }}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                                {isDeposition && (
+                                  <div style={{ flex: '1 1 240px', minWidth: '220px' }}>
+                                    <label className="muted" style={{ display: 'block', fontSize: '11px', marginBottom: '4px' }}>Witness</label>
+                                    <CasePartyPicker
+                                      matterId={matterId}
+                                      value={row.casePeopleId}
+                                      valueName={row.casePeopleName}
+                                      onChange={(id, name) => {
+                                        updateRow(row.id, 'casePeopleId', id);
+                                        updateRow(row.id, 'casePeopleName', name);
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>

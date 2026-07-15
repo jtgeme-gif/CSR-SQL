@@ -19,16 +19,19 @@ const VALID_CATEGORIES = [
   'Trial',
 ];
 
-const SYSTEM_PROMPT = `You extract scheduling deadlines and events from legal documents (court scheduling orders, Notices of Electronic Filing, or similar) for a law firm's case tracker.
+const SYSTEM_PROMPT = `You extract scheduling deadlines and events from legal documents (court scheduling orders, Notices of Electronic Filing, deposition notices, or similar) for a law firm's case tracker.
 
 Read the provided document and identify every distinct date-bound event or deadline. For each one, output:
-- "description": a short, specific label (e.g. "Discovery Cutoff", "Dispositive Motions Due", "Final Pretrial Conference", "Deposition of Officer Smith")
+- "description": a short, specific label (e.g. "Discovery Cutoff", "Dispositive Motions Due", "Final Pretrial Conference", "Deposition of Roy Johnson")
 - "category": exactly one of: ${VALID_CATEGORIES.map((c) => `"${c}"`).join(', ')}
 - "date": the date in YYYY-MM-DD format
+- "time": the time in 24-hour HH:MM format if the document explicitly states one (common for Deposition, Hearing, Status Conference/Pre-Trial, Trial, and Mediation), otherwise null
+- "witnessName": for a Deposition specifically, the name of the person being deposed if the document states one, otherwise null. Omit or set to null for every other category.
 
 Rules:
-- Only include dates that are actually stated in the document. Never guess or infer a date that isn't written down.
+- Only include dates that are actually stated in the document. Never guess or infer a date or time that isn't written down.
 - If a single line item genuinely has multiple distinct dates (e.g. a motion's filing deadline and a separate response deadline), output separate rows for each rather than combining them.
+- A document may contain multiple separate deposition notices, each for a different deponent - output one row per notice, each with its own witnessName, date, and time.
 - If you cannot confidently determine which category fits, use "Court Deadline" as the safe default.
 - Respond with ONLY a JSON array of objects in the shape described above - no prose, no markdown code fences, no explanation before or after.
 - If you find no extractable dates at all, respond with an empty JSON array: []`;
@@ -102,6 +105,8 @@ export async function POST(request) {
         description: String(row.description).trim(),
         category: row.category,
         date: row.date,
+        time: row.time && /^\d{2}:\d{2}$/.test(row.time) ? row.time : null,
+        witnessName: row.category === 'Deposition' && row.witnessName ? String(row.witnessName).trim() : null,
       }));
 
     return Response.json({ events });
