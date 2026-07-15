@@ -937,7 +937,11 @@ export default function MatterDetailPage() {
             <div className="form-row">
               <div className="form-field">
                 <label>Court Level</label>
-                <input value={courtForm.court_level || ''} onChange={(e) => updateCourt('court_level', e.target.value)} placeholder="e.g. Circuit Court, Federal District" />
+                <select value={courtForm.court_level || ''} onChange={(e) => updateCourt('court_level', e.target.value)}>
+                  <option value="">— Select —</option>
+                  <option value="State">State</option>
+                  <option value="Federal">Federal</option>
+                </select>
               </div>
               <div className="form-field">
                 <label>Court Jurisdiction</label>

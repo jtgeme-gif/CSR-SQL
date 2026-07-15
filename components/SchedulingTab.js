@@ -61,7 +61,7 @@ export default function SchedulingTab({ matterId, onChanged }) {
     // Loaded independently here (rather than relying on a prop from the
     // parent page) so this component works as a self-contained drop-in
     // regardless of what the matter detail page currently passes down.
-    const { data: matterData } = await supabase.from('matters').select('case_name, short_name').eq('id', matterId).single();
+    const { data: matterData } = await supabase.from('matters').select('case_name, short_name, court_level').eq('id', matterId).single();
     setMatterNameInfo(matterData || null);
     setLoading(false);
   }
@@ -70,6 +70,21 @@ export default function SchedulingTab({ matterId, onChanged }) {
   // Falls back to the full Case Name if Short Name was never set.
   function calendarTitlePrefix() {
     return matterNameInfo?.short_name || matterNameInfo?.case_name || '';
+  }
+
+  function todayStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+  function addDays(dateStr, days) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+  // Federal discovery responses are due in 30 days; state is 28. If the
+  // matter's Court Level hasn't been set yet, default to the 28-day (state)
+  // assumption per John's call, rather than leaving it uncalculated.
+  function discoveryDueDays() {
+    return matterNameInfo?.court_level === 'Federal' ? 30 : 28;
   }
 
   function typeLabelFor(eventTypeId) {
@@ -385,7 +400,23 @@ export default function SchedulingTab({ matterId, onChanged }) {
             <div className="modal-body">
               <div className="form-field">
                 <label>Event Type</label>
-                <select value={eventForm.event_type_id} onChange={(e) => setEventForm((f) => ({ ...f, event_type_id: e.target.value }))}>
+                <select
+                  value={eventForm.event_type_id}
+                  onChange={(e) => {
+                    const newTypeId = e.target.value;
+                    const newLabel = typeLabelFor(newTypeId);
+                    setEventForm((f) => {
+                      const defaultingToday = newLabel === 'Discovery' && !f.event_date;
+                      const newEventDate = defaultingToday ? todayStr() : f.event_date;
+                      return {
+                        ...f,
+                        event_type_id: newTypeId,
+                        event_date: newEventDate,
+                        secondary_date: defaultingToday ? addDays(newEventDate, discoveryDueDays()) : f.secondary_date,
+                      };
+                    });
+                  }}
+                >
                   <option value="">Select…</option>
                   {eventTypes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
@@ -416,7 +447,20 @@ export default function SchedulingTab({ matterId, onChanged }) {
                       {cfg.dateLabels.map((dl, i) => (
                         <div className="form-field" key={DATE_FIELDS[i]}>
                           <label>{dl}</label>
-                          <input type="date" value={eventForm[DATE_FIELDS[i]]} onChange={(e) => setEventForm((f) => ({ ...f, [DATE_FIELDS[i]]: e.target.value }))} />
+                          <input
+                            type="date"
+                            value={eventForm[DATE_FIELDS[i]]}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEventForm((f) => {
+                                const updated = { ...f, [DATE_FIELDS[i]]: val };
+                                if (label === 'Discovery' && i === 0) {
+                                  updated.secondary_date = val ? addDays(val, discoveryDueDays()) : f.secondary_date;
+                                }
+                                return updated;
+                              });
+                            }}
+                          />
                         </div>
                       ))}
                     </div>
