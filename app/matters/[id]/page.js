@@ -91,7 +91,7 @@ export default function MatterDetailPage() {
     const { data: ceData } = await supabase.from('case_entities').select('*, entities(id, name)').eq('matter_id', matterId);
     setCaseEntities(ceData || []);
 
-    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1, phone1, address, city, state, zip, website)').eq('matter_id', matterId);
+    const { data: cpData } = await supabase.from('case_people').select('*, people(id, first_name, last_name, email1, phone1, address, city, state, zip, website, entity_id, entities(name))').eq('matter_id', matterId);
     setCasePeople(cpData || []);
 
     const { data: crData } = await supabase.from('matter_claim_reps').select('*, people(first_name, last_name, email1, entities(name))').eq('matter_id', matterId).order('created_at');
@@ -492,7 +492,7 @@ export default function MatterDetailPage() {
       <div key={cp.id} className="party-card" style={{ opacity: cp.dismissed ? 0.6 : 1 }}>
         <div className="party-card-header">
           <a className="row-link" onClick={() => setModalPersonId(cp.person_id)}>{displayName}</a>
-          <span className="badge badge-gray">Person</span>
+          {cp.people?.entities?.name && <span className="badge badge-gray">{cp.people.entities.name}</span>}
           {cp.dismissed && <span className="badge badge-red">Dismissed</span>}
           {moveButtons}
           {isEditing && <button className="btn-small btn-small-danger" onClick={() => removePersonParty(cp.id)}>Remove</button>}
@@ -644,7 +644,6 @@ export default function MatterDetailPage() {
             <div key={ce.id} className="party-card" style={{ opacity: ce.dismissed ? 0.6 : 1 }}>
               <div className="party-card-header">
                 <a className="row-link" onClick={() => setModalEntityId(ce.entities?.id)}>{ce.entities?.name}</a>
-                <span className="badge badge-blue">Entity</span>
                 {ce.dismissed && <span className="badge badge-red">Dismissed</span>}
                 {moveButtons}
                 {isEditing && <button className="btn-small btn-small-danger" onClick={() => removeEntityParty(ce.id)}>Remove</button>}
