@@ -111,9 +111,20 @@ export default function DashboardPage() {
           .from('events')
           .select('*, event_types(label), matters(case_name)')
           .in('matter_id', matterIds)
-          .eq('completed', false)
-          .order('event_date');
-        setEvents(eventsData || []);
+          .eq('completed', false);
+
+        // Discovery's event_date is Sent/Received (a historical record, not
+        // a deadline) - the actual deadline is secondary_date (Response Due).
+        // Every other type's deadline is just event_date. Sorting has to
+        // happen client-side now that the "date that matters" isn't always
+        // the same column - a plain .order('event_date') would put Discovery
+        // rows in the wrong place.
+        const withEffectiveDate = (eventsData || []).map((e) => ({
+          ...e,
+          effectiveDate: e.event_types?.label === 'Discovery' ? (e.secondary_date || e.event_date) : e.event_date,
+        }));
+        withEffectiveDate.sort((a, b) => (a.effectiveDate < b.effectiveDate ? -1 : a.effectiveDate > b.effectiveDate ? 1 : 0));
+        setEvents(withEffectiveDate);
 
         loadCsrDues(mattersData || []);
       } else {
@@ -170,15 +181,15 @@ export default function DashboardPage() {
   const today = todayStr();
   const overdueFloor = addDays(today, -OVERDUE_CAP_DAYS);
 
-  const overdue = events.filter((e) => e.event_date < today && e.event_date >= overdueFloor);
+  const overdue = events.filter((e) => e.effectiveDate < today && e.effectiveDate >= overdueFloor);
 
   const window1 = parseInt(daysWindow1, 10);
   const window2 = parseInt(daysWindow2, 10);
   const dueWithin1 = !isNaN(window1) && window1 >= 1 && window1 <= 90
-    ? events.filter((e) => e.event_date >= today && e.event_date <= addDays(today, window1))
+    ? events.filter((e) => e.effectiveDate >= today && e.effectiveDate <= addDays(today, window1))
     : [];
   const dueWithin2 = !isNaN(window2) && window2 >= 1 && window2 <= 90
-    ? events.filter((e) => e.event_date >= today && e.event_date <= addDays(today, window2))
+    ? events.filter((e) => e.effectiveDate >= today && e.effectiveDate <= addDays(today, window2))
     : [];
 
   // Open Matters breakdown - counts by case_status, Closed excluded entirely.
@@ -188,9 +199,10 @@ export default function DashboardPage() {
     count: openMatters.filter((m) => m.case_status === status).length,
   }));
 
-  // Soonest incomplete event per matter (events already ordered ascending by
-  // event_date, so the first row seen for a given matter_id is its next
-  // deadline). CSR dates never appear here - CSR lives only in its own panel.
+  // Soonest incomplete event per matter (events are sorted ascending by
+  // effectiveDate above, so the first row seen for a given matter_id is its
+  // next deadline). CSR dates never appear here - CSR lives only in its own
+  // panel.
   const nextDeadlineByMatter = {};
   events.forEach((e) => {
     if (!nextDeadlineByMatter[e.matter_id]) {
@@ -204,8 +216,8 @@ export default function DashboardPage() {
       return {
         ...m,
         nextDeadlineLabel: next ? (next.description || next.event_types?.label || '—') : null,
-        nextDeadlineDate: next ? next.event_date : null,
-        daysOut: next ? daysBetween(today, next.event_date) : null,
+        nextDeadlineDate: next ? next.effectiveDate : null,
+        daysOut: next ? daysBetween(today, next.effectiveDate) : null,
       };
     })
     .sort((a, b) => {
@@ -230,7 +242,7 @@ export default function DashboardPage() {
           {list.map((e) => (
             <div key={e.id} style={{ fontSize: '13px' }}>
               <Link href={`/matters/${e.matter_id}`} style={{ fontWeight: 600 }}>{e.matters?.case_name}</Link>
-              {' — '}{e.description || e.event_types?.label} <span className="muted">({formatDateSafe(e.event_date)})</span>
+              {' — '}{e.description || e.event_types?.label} <span className="muted">({formatDateSafe(e.effectiveDate)})</span>
             </div>
           ))}
         </div>
