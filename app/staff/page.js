@@ -68,6 +68,7 @@ export default function StaffListPage() {
               <th>Email</th>
               <th>Cell Phone</th>
               <th>Work Phone</th>
+              <th>Attorney</th>
               <th>Active</th>
               <th></th>
             </tr>
@@ -79,6 +80,7 @@ export default function StaffListPage() {
                 <td>{s.email || '—'}</td>
                 <td>{formatPhoneDisplay(s.cell_phone) || '—'}</td>
                 <td>{formatPhoneDisplay(s.work_phone) || '—'}{s.extension ? ` ext. ${s.extension}` : ''}</td>
+                <td>{s.is_attorney ? 'Yes' : 'No'}</td>
                 <td>{s.active ? 'Yes' : 'No'}</td>
                 <td className="row-actions">
                   <button className="btn-small" onClick={() => setModalStaffId(s.id)}>View</button>

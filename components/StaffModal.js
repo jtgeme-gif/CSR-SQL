@@ -8,7 +8,7 @@ import { formatPhoneDisplay } from '../lib/formatPhone';
 const BLANK_FORM = {
   first_name: '', middle_name: '', last_name: '',
   email: '', cell_phone: '', work_phone: '', extension: '',
-  active: true,
+  active: true, is_attorney: false,
 };
 
 // staffId === null/undefined => Create mode (blank form, opens straight into editing)
@@ -52,6 +52,7 @@ export default function StaffModal({ staffId, startInEdit, onClose, onChanged })
       work_phone: form.work_phone?.trim() || null,
       extension: form.extension?.trim() || null,
       active: !!form.active,
+      is_attorney: !!form.is_attorney,
     };
   }
 
@@ -105,6 +106,7 @@ export default function StaffModal({ staffId, startInEdit, onClose, onChanged })
             <div className="detail-grid">
               <div className="detail-card"><span className="detail-label">Email</span><span className="detail-value">{staffMember.email || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Active</span><span className="detail-value">{staffMember.active ? 'Yes' : 'No'}</span></div>
+              <div className="detail-card"><span className="detail-label">Attorney</span><span className="detail-value">{staffMember.is_attorney ? 'Yes' : 'No'}</span></div>
               <div className="detail-card"><span className="detail-label">Cell Phone</span><span className="detail-value">{formatPhoneDisplay(staffMember.cell_phone) || '—'}</span></div>
               <div className="detail-card"><span className="detail-label">Work Phone</span><span className="detail-value">{formatPhoneDisplay(staffMember.work_phone) || '—'}{staffMember.extension ? ` ext. ${staffMember.extension}` : ''}</span></div>
             </div>
@@ -131,6 +133,10 @@ export default function StaffModal({ staffId, startInEdit, onClose, onChanged })
             <div className="form-checkbox">
               <input type="checkbox" id="staff-active" checked={!!form.active} onChange={(e) => update('active', e.target.checked)} />
               <label htmlFor="staff-active">Active</label>
+            </div>
+            <div className="form-checkbox">
+              <input type="checkbox" id="staff-attorney" checked={!!form.is_attorney} onChange={(e) => update('is_attorney', e.target.checked)} />
+              <label htmlFor="staff-attorney">Attorney</label>
             </div>
 
             {error && <div className="error-box">{error}</div>}
