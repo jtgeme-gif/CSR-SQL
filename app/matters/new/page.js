@@ -41,15 +41,12 @@ export default function NewMatterPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [showNoAttorneyConfirm, setShowNoAttorneyConfirm] = useState(false);
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  // Auto-derives Short Name from Case Name (everything before " v "/" v. ")
-  // only while the person hasn't manually typed their own Short Name yet -
-  // same safe "only fill when blank/untouched" pattern used elsewhere in the
-  // app (e.g. Response Due auto-calculating without fighting a manual edit).
   function updateCaseName(value) {
     setForm((f) => {
       const next = { ...f, case_name: value };
@@ -96,6 +93,25 @@ export default function NewMatterPage() {
       setError('Case Name is required.');
       return;
     }
+    setError(null);
+
+    const assignedIds = staffList.map((s) => s.staff_id);
+    let anyAttorney = false;
+    if (assignedIds.length > 0) {
+      const { data: attorneyCheck } = await supabase.from('staff').select('id, is_attorney').in('id', assignedIds);
+      anyAttorney = (attorneyCheck || []).some((s) => s.is_attorney);
+    }
+
+    if (!anyAttorney) {
+      setShowNoAttorneyConfirm(true);
+      return;
+    }
+
+    await createMatter();
+  }
+
+  async function createMatter() {
+    setShowNoAttorneyConfirm(false);
     setSaving(true);
     setError(null);
 
@@ -145,6 +161,23 @@ export default function NewMatterPage() {
       } else {
         const { error: dError } = await supabase.from('case_entities').insert({ matter_id: matterId, entity_id: d.entity_id, role: 'Defendant' });
         if (dError) alert(`Matter created, but adding defendant "${d.name}" failed: ` + dError.message);
+      }
+    }
+
+    const assignedIds = staffList.map((s) => s.staff_id);
+    if (assignedIds.length > 0) {
+      try {
+        const sendResp = await fetch('/api/send-new-matter-forms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ matterId, caseName: form.case_name.trim(), staffIds: assignedIds }),
+        });
+        const sendData = await sendResp.json();
+        if (!sendResp.ok) {
+          alert('Matter created, but sending the CSR/Budget forms failed: ' + (sendData.error || 'Unknown error'));
+        }
+      } catch (sendErr) {
+        alert('Matter created, but sending the CSR/Budget forms failed: ' + sendErr.message);
       }
     }
 
@@ -313,6 +346,27 @@ export default function NewMatterPage() {
           <button type="button" className="btn" onClick={() => router.push('/')}>Cancel</button>
         </div>
       </form>
+
+      {showNoAttorneyConfirm && (
+        <div className="modal-overlay" onClick={() => setShowNoAttorneyConfirm(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>No Attorney Assigned</h2>
+              <button className="modal-close" onClick={() => setShowNoAttorneyConfirm(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginTop: 0 }}>
+                This matter will be created with no attorney assigned. The blank CSR and Litigation Budget
+                forms are only emailed to assigned attorneys, so they won't be sent until one is added.
+              </p>
+              <div className="modal-actions">
+                <button className="btn btn-primary" onClick={createMatter}>Continue Anyway</button>
+                <button className="btn" onClick={() => setShowNoAttorneyConfirm(false)}>Return &amp; Assign Attorney</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
