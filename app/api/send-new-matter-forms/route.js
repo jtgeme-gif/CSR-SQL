@@ -35,8 +35,8 @@ export async function POST(req) {
       return NextResponse.json({ success: true, skipped: true, reason: 'No assigned staff are flagged as attorneys.' });
     }
 
-    const csrPath = path.join(process.cwd(), 'public', 'forms', 'blank-csr-form.docx');
-    const budgetPath = path.join(process.cwd(), 'public', 'forms', 'blank-budget-form.xlsx');
+    const csrPath = path.join(process.cwd(), 'public', 'blank-csr-form.docx');
+    const budgetPath = path.join(process.cwd(), 'public', 'blank-budget-form.xlsx');
 
     const attachments = [
       { name: 'Blank CSR Form.docx', contentBytes: fs.readFileSync(csrPath).toString('base64') },
