@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { formatDateSafe } from '../lib/formatDate';
 import SubmitCSRModal from '../components/SubmitCSRModal';
+import MatterEditModal from '../components/MatterEditModal';
 
 // Only these two see every matter regardless of assignment (management/IT
 // oversight, per your call). Everyone else sees only matters they're
@@ -47,6 +48,7 @@ export default function AllCSRsPage() {
   const [staffFilter, setStaffFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [submitMatter, setSubmitMatter] = useState(null);
+  const [editMatterId, setEditMatterId] = useState(null);
 
   useEffect(() => {
     document.title = 'CSR Tracker';
@@ -185,13 +187,11 @@ export default function AllCSRsPage() {
                         <div>{m.case_name}</div>
                         {m.file_number && <div className="muted" style={{ fontSize: '11px' }}>{m.file_number}</div>}
                         <a
-                          href={`https://m3casetracking.vercel.app/matters/${m.id}`}
-                          target="_blank"
-                          rel="noreferrer"
+                          onClick={() => setEditMatterId(m.id)}
                           className="muted"
-                          style={{ fontSize: '11px', display: 'inline-block', marginTop: '2px' }}
+                          style={{ fontSize: '11px', display: 'inline-block', marginTop: '2px', cursor: 'pointer' }}
                         >
-                          Edit in Matter Tracker →
+                          Edit
                         </a>
                       </td>
                       <td>{m.practice_group || '—'}</td>
@@ -231,6 +231,14 @@ export default function AllCSRsPage() {
           matter={submitMatter}
           onClose={() => setSubmitMatter(null)}
           onSubmitted={load}
+        />
+      )}
+
+      {editMatterId && (
+        <MatterEditModal
+          matterId={editMatterId}
+          onClose={() => setEditMatterId(null)}
+          onSaved={load}
         />
       )}
     </div>

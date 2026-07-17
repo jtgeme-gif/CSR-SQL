@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import PersonPicker from '../../../components/PersonPicker';
-import EntityPicker from '../../../components/EntityPicker';
 import StaffPicker from '../../../components/StaffPicker';
 import { deriveShortName } from '../../../lib/deriveShortName';
 
@@ -17,6 +16,12 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
+// CSR-SQL's New Matter form - no Incident Date, no Defendants (this app is
+// purely CSR/admin tracking, not case substance). Initial CSR Due replaces
+// Incident Date in the layout: auto-fills from Date Opened + 45 days, but
+// stays freely overridable for backdating legacy matters or handling
+// insurer-granted extensions. Claims Reps support multiple, since real
+// matters commonly have more than one.
 export default function NewMatterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -25,19 +30,18 @@ export default function NewMatterPage() {
     practice_group: '',
     case_status: 'Pre-litigation Monitoring',
     date_opened: '',
-    incident_date: '',
+    csr_initial_due: '',
     file_number: '',
   });
   const [shortNameTouched, setShortNameTouched] = useState(false);
+  const [csrInitialDueTouched, setCsrInitialDueTouched] = useState(false);
 
+  const [claimReps, setClaimReps] = useState([]);
   const [claimRepPick, setClaimRepPick] = useState({ person_id: null, person_name: '' });
-  const [claimNumber, setClaimNumber] = useState('');
+  const [claimNumberDraft, setClaimNumberDraft] = useState('');
 
   const [staffList, setStaffList] = useState([]);
   const [staffPick, setStaffPick] = useState({ staff_id: null, staff_name: '' });
-
-  const [defendants, setDefendants] = useState([]);
-  const [defendantForm, setDefendantForm] = useState({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '' });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -62,6 +66,24 @@ export default function NewMatterPage() {
     update('short_name', value);
   }
 
+  // Same "auto-fill until touched" pattern as Short Name - Initial CSR Due
+  // defaults to Date Opened + 45, but a manual edit sticks even if Date
+  // Opened changes afterward.
+  function updateDateOpened(value) {
+    setForm((f) => {
+      const next = { ...f, date_opened: value };
+      if (!csrInitialDueTouched) {
+        next.csr_initial_due = value ? addDays(value, 45) : '';
+      }
+      return next;
+    });
+  }
+
+  function updateCsrInitialDue(value) {
+    setCsrInitialDueTouched(true);
+    update('csr_initial_due', value);
+  }
+
   function addStaffToList() {
     if (!staffPick.staff_id) return;
     if (staffList.some((s) => s.staff_id === staffPick.staff_id)) {
@@ -75,16 +97,14 @@ export default function NewMatterPage() {
     setStaffList((s) => s.filter((x) => x.staff_id !== staffId));
   }
 
-  function addDefendantToList() {
-    const f = defendantForm;
-    if (f.partyType === 'Person' && !f.person_id) { alert('Pick or create a person first.'); return; }
-    if (f.partyType === 'Entity' && !f.entity_id) { alert('Pick or create an entity first.'); return; }
-    const name = f.partyType === 'Person' ? f.person_name : f.entity_name;
-    setDefendants((d) => [...d, { ...f, name }]);
-    setDefendantForm({ partyType: 'Person', person_id: null, person_name: '', entity_id: null, entity_name: '' });
+  function addClaimRepToList() {
+    if (!claimRepPick.person_id) { alert('Pick or create a claims rep first.'); return; }
+    setClaimReps((c) => [...c, { person_id: claimRepPick.person_id, person_name: claimRepPick.person_name, claim_number: claimNumberDraft.trim() }]);
+    setClaimRepPick({ person_id: null, person_name: '' });
+    setClaimNumberDraft('');
   }
-  function removeDefendantFromList(idx) {
-    setDefendants((d) => d.filter((_, i) => i !== idx));
+  function removeClaimRepFromList(idx) {
+    setClaimReps((c) => c.filter((_, i) => i !== idx));
   }
 
   async function handleSubmit(e) {
@@ -115,18 +135,15 @@ export default function NewMatterPage() {
     setSaving(true);
     setError(null);
 
-    const csrInitialDue = form.date_opened ? addDays(form.date_opened, 45) : null;
-
     const payload = {
       case_name: form.case_name.trim(),
       short_name: form.short_name.trim() || null,
       practice_group: form.practice_group || null,
       case_status: form.case_status || null,
       date_opened: form.date_opened || null,
-      incident_date: form.incident_date || null,
       file_number: form.file_number.trim() || null,
-      csr_initial_due: csrInitialDue,
-      csr_next_due: csrInitialDue,
+      csr_initial_due: form.csr_initial_due || null,
+      csr_next_due: form.csr_initial_due || null,
     };
 
     const { data: matter, error: matterError } = await supabase.from('matters').insert(payload).select().single();
@@ -139,29 +156,20 @@ export default function NewMatterPage() {
 
     const matterId = matter.id;
 
-    if (claimRepPick.person_id) {
-      const { error: crError } = await supabase.from('matter_claim_reps').insert({
+    if (claimReps.length > 0) {
+      const crPayload = claimReps.map((cr) => ({
         matter_id: matterId,
-        person_id: claimRepPick.person_id,
-        claim_number: claimNumber.trim() || null,
-      });
-      if (crError) alert('Matter created, but adding the claim rep failed: ' + crError.message);
+        person_id: cr.person_id,
+        claim_number: cr.claim_number || null,
+      }));
+      const { error: crError } = await supabase.from('matter_claim_reps').insert(crPayload);
+      if (crError) alert('Matter created, but adding claims reps failed: ' + crError.message);
     }
 
     if (staffList.length > 0) {
       const staffPayload = staffList.map((s) => ({ matter_id: matterId, staff_id: s.staff_id }));
       const { error: staffError } = await supabase.from('matter_staff').insert(staffPayload);
       if (staffError) alert('Matter created, but assigning staff failed: ' + staffError.message);
-    }
-
-    for (const d of defendants) {
-      if (d.partyType === 'Person') {
-        const { error: dError } = await supabase.from('case_people').insert({ matter_id: matterId, person_id: d.person_id, role: 'Defendant' });
-        if (dError) alert(`Matter created, but adding defendant "${d.name}" failed: ` + dError.message);
-      } else {
-        const { error: dError } = await supabase.from('case_entities').insert({ matter_id: matterId, entity_id: d.entity_id, role: 'Defendant' });
-        if (dError) alert(`Matter created, but adding defendant "${d.name}" failed: ` + dError.message);
-      }
     }
 
     const assignedIds = staffList.map((s) => s.staff_id);
@@ -188,7 +196,7 @@ export default function NewMatterPage() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1>New Matter</h1>
+        <h1>New CSR</h1>
       </div>
 
       <form className="form" onSubmit={handleSubmit}>
@@ -212,9 +220,6 @@ export default function NewMatterPage() {
             onChange={(e) => updateShortName(e.target.value)}
             placeholder="Auto-fills from Case Name, e.g. 'Smith' - override anytime"
           />
-          <p className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
-            Used in calendar event titles ("Short Name - Event"). Auto-fills from Case Name until you type your own.
-          </p>
         </div>
 
         <div className="form-row">
@@ -237,12 +242,15 @@ export default function NewMatterPage() {
         <div className="form-row">
           <div className="form-field">
             <label>Date Opened</label>
-            <input type="date" value={form.date_opened} onChange={(e) => update('date_opened', e.target.value)} />
+            <input type="date" value={form.date_opened} onChange={(e) => updateDateOpened(e.target.value)} />
           </div>
 
           <div className="form-field">
-            <label>Incident Date</label>
-            <input type="date" value={form.incident_date} onChange={(e) => update('incident_date', e.target.value)} />
+            <label>Initial CSR Due</label>
+            <input type="date" value={form.csr_initial_due} onChange={(e) => updateCsrInitialDue(e.target.value)} />
+            <p className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+              Auto-fills from Date Opened + 45 days. Override for legacy matters or a granted extension.
+            </p>
           </div>
         </div>
 
@@ -256,18 +264,31 @@ export default function NewMatterPage() {
           />
         </div>
 
-        <div className="form-row">
-          <div className="form-field">
-            <label>Claim Rep</label>
+        <div className="form-field">
+          <label>Claims Reps</label>
+          <div className="chip-row">
+            {claimReps.length === 0 && <span className="muted">None added yet.</span>}
+            {claimReps.map((cr, i) => (
+              <span key={i} className="chip chip-removable">
+                {cr.person_name}{cr.claim_number ? ` — ${cr.claim_number}` : ''}
+                <button type="button" onClick={() => removeClaimRepFromList(i)}>×</button>
+              </span>
+            ))}
+          </div>
+          <div className="inline-add-row">
             <PersonPicker
               value={claimRepPick.person_id}
               valueName={claimRepPick.person_name}
               onChange={(id, name) => setClaimRepPick({ person_id: id, person_name: name })}
             />
-          </div>
-          <div className="form-field">
-            <label>Claim Number</label>
-            <input type="text" value={claimNumber} onChange={(e) => setClaimNumber(e.target.value)} />
+            <input
+              type="text"
+              placeholder="Claim number"
+              value={claimNumberDraft}
+              onChange={(e) => setClaimNumberDraft(e.target.value)}
+              style={{ maxWidth: '160px' }}
+            />
+            <button type="button" className="btn-small" onClick={addClaimRepToList}>+ Add</button>
           </div>
         </div>
 
@@ -289,53 +310,6 @@ export default function NewMatterPage() {
               onChange={(id, name) => setStaffPick({ staff_id: id, staff_name: name })}
             />
             <button type="button" className="btn-small" onClick={addStaffToList}>+ Add</button>
-          </div>
-        </div>
-
-        <div className="form-field">
-          <label>Defendants</label>
-          <div className="chip-row">
-            {defendants.length === 0 && <span className="muted">None added yet.</span>}
-            {defendants.map((d, i) => (
-              <span key={i} className="chip chip-removable">
-                {d.name} <span className="muted" style={{ fontSize: '11px' }}>({d.partyType})</span>
-                <button type="button" onClick={() => removeDefendantFromList(i)}>×</button>
-              </span>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-            <button
-              type="button"
-              className={`btn-small ${defendantForm.partyType === 'Person' ? 'btn-primary' : ''}`}
-              onClick={() => setDefendantForm((f) => ({ ...f, partyType: 'Person' }))}
-            >
-              Person
-            </button>
-            <button
-              type="button"
-              className={`btn-small ${defendantForm.partyType === 'Entity' ? 'btn-primary' : ''}`}
-              onClick={() => setDefendantForm((f) => ({ ...f, partyType: 'Entity' }))}
-            >
-              Entity
-            </button>
-          </div>
-
-          <div className="inline-add-row">
-            {defendantForm.partyType === 'Person' ? (
-              <PersonPicker
-                value={defendantForm.person_id}
-                valueName={defendantForm.person_name}
-                onChange={(id, name) => setDefendantForm((f) => ({ ...f, person_id: id, person_name: name }))}
-              />
-            ) : (
-              <EntityPicker
-                value={defendantForm.entity_id}
-                valueName={defendantForm.entity_name}
-                onChange={(id, name) => setDefendantForm((f) => ({ ...f, entity_id: id, entity_name: name }))}
-              />
-            )}
-            <button type="button" className="btn-small" onClick={addDefendantToList}>+ Add Defendant</button>
           </div>
         </div>
 

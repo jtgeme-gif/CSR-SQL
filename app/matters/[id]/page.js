@@ -4,11 +4,14 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 import CSRTab from '../../../components/CSRTab';
+import MatterEditModal from '../../../components/MatterEditModal';
 
 // CSR-SQL's matter detail page is deliberately narrow: no tab bar, no
 // Parties/Court & Jurisdiction/Staff sections, no Scheduling/Witnesses/
 // Case/Mediation/Notes/Subpoenas - this app only ever shows CSR tracking
-// for a matter. Everything else about a case is managed in NMT itself.
+// for a matter. Everything else about a case is managed here too, via
+// MatterEditModal, rather than deferring to NMT - same shared data either
+// way, so there's no real reason to force a trip to a different app.
 export default function MatterDetailPage() {
   const params = useParams();
   const matterId = params.id;
@@ -16,6 +19,7 @@ export default function MatterDetailPage() {
   const [matter, setMatter] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     load();
@@ -50,17 +54,18 @@ export default function MatterDetailPage() {
           <h1>{matter.case_name}</h1>
           {matter.file_number && <span className="muted" style={{ fontSize: '13px' }}>{matter.file_number}</span>}
         </div>
-        <a
-          href={`https://m3casetracking.vercel.app/matters/${matterId}`}
-          target="_blank"
-          rel="noreferrer"
-          className="btn"
-        >
-          Edit in Matter Tracker →
-        </a>
+        <button className="btn" onClick={() => setEditOpen(true)}>Edit</button>
       </div>
 
       <CSRTab matter={matter} onChanged={load} />
+
+      {editOpen && (
+        <MatterEditModal
+          matterId={matterId}
+          onClose={() => setEditOpen(false)}
+          onSaved={load}
+        />
+      )}
     </div>
   );
 }
