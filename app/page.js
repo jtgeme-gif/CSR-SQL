@@ -64,7 +64,7 @@ export default function AllCSRsPage() {
     const email = userData?.user?.email;
     const admin = !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 
-    const { data: staffData } = await supabase.from('staff').select('id, first_name, last_name').eq('active', true).order('last_name');
+    const { data: staffData } = await supabase.from('staff').select('id, first_name, last_name').eq('active', true).eq('is_attorney', true).order('last_name');
     setStaffList(staffData || []);
 
     let matterIds = null;
