@@ -46,8 +46,18 @@ export default function MatterDetailPage() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1>{matter.case_name}</h1>
-        {matter.file_number && <span className="muted" style={{ fontSize: '13px' }}>{matter.file_number}</span>}
+        <div>
+          <h1>{matter.case_name}</h1>
+          {matter.file_number && <span className="muted" style={{ fontSize: '13px' }}>{matter.file_number}</span>}
+        </div>
+        <a
+          href={`https://m3casetracking.vercel.app/matters/${matterId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn"
+        >
+          Edit in Matter Tracker →
+        </a>
       </div>
 
       <CSRTab matter={matter} onChanged={load} />

@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 import { formatDateSafe } from '../lib/formatDate';
+import SubmitCSRModal from '../components/SubmitCSRModal';
 
 // Only these two see every matter regardless of assignment (management/IT
 // oversight, per your call). Everyone else sees only matters they're
 // assigned to via matter_staff, same scoping pattern the Dashboard already
 // uses in NMT. TOM_EMAIL is a placeholder - confirm his real address.
-const ADMIN_EMAILS = ['jgemellaro@mcgrawmorris.com', 'tom@mcgrawmorris.com'];
+const ADMIN_EMAILS = ['jgemellaro@mcgrawmorris.com', 'tmcgraw@mcgrawmorris.com'];
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -45,6 +46,7 @@ export default function AllCSRsPage() {
   const [groupFilter, setGroupFilter] = useState('all');
   const [staffFilter, setStaffFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [submitMatter, setSubmitMatter] = useState(null);
 
   useEffect(() => {
     document.title = 'CSR Tracker';
@@ -182,6 +184,15 @@ export default function AllCSRsPage() {
                       <td>
                         <div>{m.case_name}</div>
                         {m.file_number && <div className="muted" style={{ fontSize: '11px' }}>{m.file_number}</div>}
+                        <a
+                          href={`https://m3casetracking.vercel.app/matters/${m.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="muted"
+                          style={{ fontSize: '11px', display: 'inline-block', marginTop: '2px' }}
+                        >
+                          Edit in Matter Tracker →
+                        </a>
                       </td>
                       <td>{m.practice_group || '—'}</td>
                       <td>
@@ -204,7 +215,7 @@ export default function AllCSRsPage() {
                       <td>{m.csr_next_due ? formatDateSafe(m.csr_next_due) : '—'}</td>
                       <td><span className={`badge badge-${status.color}`}>{status.label}</span></td>
                       <td>
-                        <Link href={`/matters/${m.id}`} className="btn btn-primary btn-small">Submit</Link>
+                        <button className="btn btn-primary btn-small" onClick={() => setSubmitMatter(m)}>Submit</button>
                       </td>
                     </tr>
                   );
@@ -213,6 +224,14 @@ export default function AllCSRsPage() {
             </table>
           )}
         </>
+      )}
+
+      {submitMatter && (
+        <SubmitCSRModal
+          matter={submitMatter}
+          onClose={() => setSubmitMatter(null)}
+          onSubmitted={load}
+        />
       )}
     </div>
   );
