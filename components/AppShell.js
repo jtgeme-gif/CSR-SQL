@@ -1,29 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { supabase } from '../lib/supabaseClient';
+import Link from 'next/link';
 
+// CSR-SQL's sidebar, trimmed from NMT's original AppShell.js:
+// - No Dashboard, no "All Matters" (replaced by "All CSRs" - this app's homepage)
+// - No Starred Matters (an NMT-wide convenience feature that doesn't fit
+//   this app's single-purpose scope - flagging in case you want it back)
+// - Directory/Entities/Judges/Attorneys/Mediators kept as-is, per the
+//   directory-access decision
+// - Staff List kept (staff management stays in both apps)
+// - New "CSR Form" section: plain downloads only, no Word Online editing
+//   (per your call to simplify), pointed at this repo's own /public files
 export default function AppShell({ session, onSignOut, children }) {
   const pathname = usePathname();
-  const [starred, setStarred] = useState([]);
-
-  useEffect(() => {
-    loadStarred();
-  }, [pathname]);
-
-  async function loadStarred() {
-    const { data } = await supabase
-      .from('matters')
-      .select('id, case_name, court_case_number')
-      .eq('starred', true)
-      .order('case_name');
-    setStarred(data || []);
-  }
 
   const name = session?.user?.user_metadata?.full_name || session?.user?.email || 'User';
-  const email = session?.user?.email || '';
   const initials = name
     .split(' ')
     .map((n) => n[0])
@@ -37,7 +29,7 @@ export default function AppShell({ session, onSignOut, children }) {
   return (
     <div className="app-shell">
       <header className="top-bar">
-        <span className="brand">Matter Tracker</span>
+        <span className="brand">CSR Tracker</span>
         <div className="top-bar-right">
           <div className="user-badge">
             <span className="avatar">{initials || 'U'}</span>
@@ -58,11 +50,8 @@ export default function AppShell({ session, onSignOut, children }) {
 
           <nav className="sidebar-nav">
             <div className="nav-section-label">Main</div>
-            <Link href="/dashboard" className={`nav-item ${isActive('/dashboard') ? 'active' : ''}`}>
-              Dashboard
-            </Link>
             <Link href="/" className={`nav-item ${isActive('/') ? 'active' : ''}`}>
-              All Matters
+              All CSRs
             </Link>
 
             <div className="nav-section-label">Contacts</div>
@@ -86,18 +75,14 @@ export default function AppShell({ session, onSignOut, children }) {
             <Link href="/staff" className={`nav-item ${isActive('/staff') ? 'active' : ''}`}>
               Staff List
             </Link>
-            <span className="nav-item disabled">Settings</span>
 
-            <div className="nav-section-label">Starred Matters</div>
-            <div className="sidebar-starred">
-              {starred.length === 0 && <div className="starred-empty">None yet</div>}
-              {starred.map((m) => (
-                <Link key={m.id} href={`/matters/${m.id}`} className="starred-item">
-                  ★ {m.case_name}
-                  {m.court_case_number ? ` ${m.court_case_number}` : ''}
-                </Link>
-              ))}
-            </div>
+            <div className="nav-section-label">CSR Form</div>
+            <a href="/blank-csr-form.docx" download className="nav-item">
+              Download Blank CSR
+            </a>
+            <a href="/blank-budget-form.xlsx" download className="nav-item">
+              Download Litigation Budget
+            </a>
           </nav>
         </aside>
 
