@@ -122,6 +122,16 @@ export default function AllCSRsPage() {
     return true;
   });
 
+  // Summary boxes reflect everything you have access to see (before search/
+  // dropdown filtering), not just the currently-filtered rows - same as
+  // NMT's own Dashboard alert boxes, which aren't affected by any list
+  // filter either. Closed matters count toward Total but aren't broken
+  // out into their own box, same as the reference design.
+  const totalCount = matters.length;
+  const overdueCount = matters.filter((m) => csrStatus(m).label.startsWith('Overdue')).length;
+  const dueSoonCount = matters.filter((m) => csrStatus(m).label.startsWith('Due')).length;
+  const onTrackCount = matters.filter((m) => csrStatus(m).label === 'On track').length;
+
   return (
     <div className="page">
       <div className="page-header">
@@ -151,6 +161,25 @@ export default function AllCSRsPage() {
           />
           <button className="btn btn-primary" onClick={load}>↻ Refresh</button>
           <Link href="/matters/new" className="btn btn-primary">+ New CSR</Link>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+        <div className="section-card" style={{ flex: 1 }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--navy)' }}>{totalCount}</div>
+          <div className="muted" style={{ fontSize: '11px', letterSpacing: '0.5px' }}>TOTAL CSRs</div>
+        </div>
+        <div className="section-card" style={{ flex: 1, borderLeft: '4px solid var(--red)' }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--red)' }}>{overdueCount}</div>
+          <div className="muted" style={{ fontSize: '11px', letterSpacing: '0.5px' }}>OVERDUE</div>
+        </div>
+        <div className="section-card" style={{ flex: 1, borderLeft: '4px solid var(--orange)' }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--orange)' }}>{dueSoonCount}</div>
+          <div className="muted" style={{ fontSize: '11px', letterSpacing: '0.5px' }}>DUE ≤ 14 DAYS</div>
+        </div>
+        <div className="section-card" style={{ flex: 1, borderLeft: '4px solid var(--green)' }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--green)' }}>{onTrackCount}</div>
+          <div className="muted" style={{ fontSize: '11px', letterSpacing: '0.5px' }}>ON TRACK</div>
         </div>
       </div>
 
