@@ -136,6 +136,7 @@ export default function NewMatterPage() {
     setError(null);
 
     const payload = {
+      created_in_csr: true,
       case_name: form.case_name.trim(),
       short_name: form.short_name.trim() || null,
       practice_group: form.practice_group || null,
